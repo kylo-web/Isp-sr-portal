@@ -11,7 +11,7 @@ const SMARTOLT_API_KEY = 'YOUR_SMARTOLT_API_KEY';
 
 // Telegram Configuration
 const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
-const TELEGRAM_CHAT_ID = '1004295109530';
+const TELEGRAM_CHAT_ID = '-1004295109530';
 
 // Memory Cache
 const userReportHistory = {};
