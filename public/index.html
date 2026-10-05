@@ -29,7 +29,7 @@
         <label>Customer ID (User ID) *</label>
         <input type="text" id="customerId" placeholder="ဥပမာ - TTY01234" required>
     </div>
-
+<small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
     <div class="form-group">
         <label>ကြုံတွေ့နေရသော ပြဿနာ ရွေးချယ်ပါ *</label>
         <div class="options-grid">
@@ -112,8 +112,31 @@
             submitBtn.innerText = "ပြဿနာအား တင်ပြမည်";
         }
     }
-</script>
+</script>document.getElementById('customerId').addEventListener('blur', async function() {
+    const customerId = this.value.trim();
+    const nameDisplay = document.getElementById('customerNameDisplay');
+    
+    if (!customerId) {
+        nameDisplay.innerText = '';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/get-customer/${customerId}`);
+        const data = await response.json();
+
+        if (data.success) {
+            nameDisplay.innerText = `👤 Name: ${data.username}`;
+        } else {
+            nameDisplay.innerText = `❌ ${data.message}`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+});
 
 </body>
 </html>
 <small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
+<small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
+

@@ -167,3 +167,54 @@ app.get('/api/get-customer/:id', (req, res) => {
         });
     }
 });
+// Customer ID ဖြင့် နာမည်အတု (Dummy) ထုတ်ပေးရန် API
+app.get('/api/get-customer/:id', (req, res) => {
+    const customerId = req.params.id;
+
+    // လိုအပ်သော Customer ID များနှင့် နာမည်များကို ဤနေရာတွင် ထည့်နိုင်ပါသည်
+    const mockDatabase = {
+        'Tty01072': 'Min thiha',
+        'Tty00001': 'Kyaw Gyi',
+        'Tty00002': 'Aung Aung'
+    };
+
+    const customerName = mockDatabase[customerId];
+
+    if (customerName) {
+        res.json({
+            success: true,
+            username: customerName
+        });
+    } else {
+        res.json({
+            success: false,
+            message: 'Customer ID မရှိပါ'
+        });
+    }
+});
+
+// Customer ID ဖြင့် နာမည်အတု (Dummy) ထုတ်ပေးရန် API
+app.get('/api/get-customer/:id', (req, res) => {
+    const customerId = req.params.id;
+
+    // လိုအပ်သော Customer ID များနှင့် နာမည်များကို ဤနေရာတွင် ထည့်နိုင်ပါသည်
+    const mockDatabase = {
+        'Tty01072': 'Min thiha',
+        'Tty00001': 'Kyaw Gyi',
+        'Tty00002': 'Aung Aung'
+    };
+
+    const customerName = mockDatabase[customerId];
+
+    if (customerName) {
+        res.json({
+            success: true,
+            username: customerName
+        });
+    } else {
+        res.json({
+            success: false,
+            message: 'Customer ID မရှိပါ'
+        });
+    }
+});
