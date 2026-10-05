@@ -1,7 +1,3 @@
-
-
-
-
 const express = require('express');
 const axios = require('axios');
 const app = express();
@@ -15,7 +11,7 @@ const SMARTOLT_API_KEY = 'YOUR_SMARTOLT_API_KEY';
 
 // Telegram Configuration
 const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
-const TELEGRAM_CHAT_ID = '-1004295109530';
+const TELEGRAM_CHAT_ID = '1004295109530';
 
 // Memory Cache
 const userReportHistory = {};
@@ -141,29 +137,3 @@ ${onuStatusInfo}
 });
 
 app.listen(3000, () => console.log('Server is running on port 3000'));
-https://isp-sr-portal-2.onrender.com
-// Customer ID ဖြင့် နာမည်အတု (Dummy) ထုတ်ပေးရန် API
-app.get('/api/get-customer/:id', (req, res) => {
-    const customerId = req.params.id;
-
-    // လိုအပ်သော Customer ID များနှင့် နာမည်များကို ဤနေရာတွင် ထည့်နိုင်ပါသည်
-    const mockDatabase = {
-        'Tty01072': 'Min thiha',
-        'Tty00001': 'Kyaw Gyi',
-        'Tty00002': 'Aung Aung'
-    };
-
-    const customerName = mockDatabase[customerId];
-
-    if (customerName) {
-        res.json({
-            success: true,
-            username: customerName
-        });
-    } else {
-        res.json({
-            success: false,
-            message: 'Customer ID မရှိပါ'
-        });
-    }
-});
