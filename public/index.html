@@ -3,168 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISP Internet Self Reporting</title>
+    <title>ISP Reporting Portal</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; padding: 20px; }
-        .container { max-width: 450px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #1a252f; margin-bottom: 20px; }
+        body { font-family: sans-serif; background-color: #121212; color: #ffffff; padding: 20px; }
+        .container { max-width: 450px; background: #1e1e1e; padding: 20px; border-radius: 8px; margin: auto; }
         .form-group { margin-bottom: 15px; }
-        label { font-weight: 600; display: block; margin-bottom: 6px; color: #34495e; }
-        input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid #cccccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
-        .option-card { border: 2px solid #e2e8f0; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; font-size: 13px; background: #f8fafc; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
-        .option-card:hover { border-color: #3b82f6; }
-        .option-card.selected { border-color: #2563eb; background: #eff6ff; font-weight: bold; color: #1e40af; }
-        .full-width { grid-column: span 2; }
-        .btn-submit { width: 100%; padding: 12px; background: #16a34a; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; }
-        .btn-submit:disabled { background: #9ca3af; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 12px; box-sizing: border-box; border: 1px solid #333; border-radius: 6px; background-color: #2a2a2a; color: #fff; font-size: 16px; }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="form-group">
+            <label>Customer ID (User ID) *</label>
 
-<div class="container">
-    <h2>Internet ပြဿနာ တင်ပြရန်</h2>
-    
-    <div class="form-group">
-        <label>Customer ID (User ID) *</label>
-        <input type="text" id="customerId" placeholder="ဥပမာ - TTY01234" required>
-    </div>
-<small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
-    <div class="form-group">
-        <label>ကြုံတွေ့နေရသော ပြဿနာ ရွေးချယ်ပါ *</label>
-        <div class="options-grid">
-            <div class="option-card" onclick="selectOption(this, '🔴 မီးနီ (LOS Light)')">🔴 မီးနီ</div>
-            <div class="option-card" onclick="selectOption(this, '🐢 လိုင်းနှေး (Slow Speed)')">🐢 လိုင်းနှေး</div>
-            <div class="option-card full-width" onclick="selectOption(this, '🟡 PON မီးခုန် / မီးသုံးလုံးစိမ်းပြီး လိုင်းသုံးမရ')">🟡 PON မီးခုန် / မီးသုံးလုံးစိမ်းပြီး လိုင်းသုံးမရ</div>
-            <div class="option-card full-width" onclick="selectOption(this, '⚡ Power မီးတစ်ခုပဲလာ')">⚡ Power တစ်ခုပဲလာ</div>
-            <div class="option-card full-width" onclick="selectOption(this, '🔑 Password change (စကားဝှက်ပြောင်းရန်)')">🔑 Password change (စကားဝှက်ပြောင်းရန်)</div>
+            <!-- Customer ID ထည့်ရန် အကွက် -->
+            <input type="text" id="customerId" placeholder="ဥပမာ - Tty01072" required>
+
+            <!-- နာမည် ပေါ်လာမည့် နေရာ -->
+            <small id="customerNameDisplay" style="color: #4caf50; font-weight: bold; margin-top: 8px; display: block; font-size: 14px;"></small>
         </div>
     </div>
 
-    <div class="form-group" id="passwordGroup" style="display: none;">
-        <label>ပြောင်းချင်သည့် Password အသစ် *</label>
-        <input type="text" id="newPassword" placeholder="စကားဝှက် အသစ် ရိုက်ထည့်ပါ">
-    </div>
-
-    <button class="btn-submit" id="submitBtn" onclick="submitTicket()">ပြဿနာအား တင်ပြမည်</button>
-</div>
-
-<script>
-    let selectedIssue = "";
-
-    function selectOption(element, value) {
-        document.querySelectorAll('.option-card').forEach(el => el.classList.remove('selected'));
-        element.classList.add('selected');
-        selectedIssue = value;
-
-        const passwordGroup = document.getElementById('passwordGroup');
-        if (value.includes('Password change')) {
-            passwordGroup.style.display = 'block';
-        } else {
-            passwordGroup.style.display = 'none';
-            document.getElementById('newPassword').value = '';
-        }
-    }
-
-    async function submitTicket() {
-        const customerId = document.getElementById('customerId').value.trim();
-        const newPassword = document.getElementById('newPassword').value.trim();
-
+    <!-- API လှမ်းခေါ်မည့် JavaScript (ဖိုင်ရဲ့ အောက်ဆုံးတွင် ထည့်ရပါမည်) -->
+    <script>
+    document.getElementById('customerId').addEventListener('input', async function() {
+        const customerId = this.value.trim();
+        const nameDisplay = document.getElementById('customerNameDisplay');
+        
         if (!customerId) {
-            alert('ကျေးဇူးပြု၍ Customer ID ထည့်သွင်းပေးပါ။');
+            nameDisplay.innerText = '';
             return;
         }
-        if (!selectedIssue) {
-            alert('ကျေးဇူးပြု၍ ကြုံတွေ့နေရသော ပြဿနာတစ်ခု ရွေးချယ်ပါ။');
-            return;
-        }
-        if (selectedIssue.includes('Password change') && !newPassword) {
-            alert('ကျေးဇူးပြု၍ ပြောင်းချင်သည့် Password အသစ်ကို ထည့်သွင်းပေးပါ။');
-            return;
-        }
-
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.innerText = "ခဏစောင့်ပါ...";
 
         try {
-            const response = await fetch('/api/report-issue', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    customerId: customerId,
-                    issue: selectedIssue,
-                    newPassword: newPassword
-                })
-            });
+            const response = await fetch(`/api/get-customer/${customerId}`);
+            const data = await response.json();
 
-            const result = await response.json();
-            if (result.success) {
-                alert('လူကြီးမင်း၏ တင်ပြချက်ကို လက်ခံရရှိပါပြီ။ အမြန်ဆုံး စစ်ဆေးပေးပါမည်။');
-                location.reload();
+            if (data.success) {
+                nameDisplay.innerText = `👤 Name: ${data.username}`;
             } else {
-                alert(result.message);
+                nameDisplay.innerText = `❌ ${data.message}`;
             }
-        } catch (err) {
-            alert('Server နှင့် ချိတ်ဆက်၍ မရပါ။');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerText = "ပြဿနာအား တင်ပြမည်";
+        } catch (error) {
+            console.error('Error:', error);
         }
-    }
-</script>document.getElementById('customerId').addEventListener('blur', async function() {
-    const customerId = this.value.trim();
-    const nameDisplay = document.getElementById('customerNameDisplay');
-    
-    if (!customerId) {
-        nameDisplay.innerText = '';
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/get-customer/${customerId}`);
-        const data = await response.json();
-
-        if (data.success) {
-            nameDisplay.innerText = `👤 Name: ${data.username}`;
-        } else {
-            nameDisplay.innerText = `❌ ${data.message}`;
-        }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-});
-
+    });
+    </script>
 </body>
 </html>
-<small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
-<small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
-
-<!-- ၁။ နာမည်ပြမည့် Small Tag -->
-<small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
-
-<!-- ၂. JavaScript ကုဒ်များကို <script> တက်ဂ်အတွင်း၌ သေချာ ထည့်ရပါမည် -->
-<script>
-document.getElementById('customerId').addEventListener('input', async function() {
-    const customerId = this.value.trim();
-    const nameDisplay = document.getElementById('customerNameDisplay');
-    
-    if (!customerId) {
-        nameDisplay.innerText = '';
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/get-customer/${customerId}`);
-        const data = await response.json();
-
-        if (data.success) {
-            nameDisplay.innerText = `👤 Name: ${data.username}`;
-        } else {
-            nameDisplay.innerText = `❌ ${data.message}`;
-        }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-});
-</script>
