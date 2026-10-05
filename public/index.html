@@ -140,3 +140,31 @@
 <small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
 <small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
 
+<!-- ၁။ နာမည်ပြမည့် Small Tag -->
+<small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
+
+<!-- ၂. JavaScript ကုဒ်များကို <script> တက်ဂ်အတွင်း၌ သေချာ ထည့်ရပါမည် -->
+<script>
+document.getElementById('customerId').addEventListener('input', async function() {
+    const customerId = this.value.trim();
+    const nameDisplay = document.getElementById('customerNameDisplay');
+    
+    if (!customerId) {
+        nameDisplay.innerText = '';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/get-customer/${customerId}`);
+        const data = await response.json();
+
+        if (data.success) {
+            nameDisplay.innerText = `👤 Name: ${data.username}`;
+        } else {
+            nameDisplay.innerText = `❌ ${data.message}`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+});
+</script>
