@@ -45,7 +45,6 @@ app.get('/api/get-customer/:id', async (req, res) => {
     const rawId = req.params.id.trim();
     const possibleIds = generatePossibleIDs(rawId);
 
-    // 1. Env Check
     if (!SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) {
         console.error('❌ Missing SmartOLT Env Variables');
         return res.json({ 
@@ -59,7 +58,6 @@ app.get('/api/get-customer/:id', async (req, res) => {
         : `https://${SMARTOLT_DOMAIN}.smartolt.com`;
 
     try {
-        // SmartOLT API တိုက်ရိုက် ခေါ်ယူခြင်း
         const listUrl = `${domainUrl}/api/onu/get_all_onus_details`;
         const response = await axios.get(listUrl, {
             headers: { 
@@ -72,7 +70,6 @@ app.get('/api/get-customer/:id', async (req, res) => {
         if (response.data && response.data.onus && Array.isArray(response.data.onus)) {
             const allOnus = response.data.onus;
 
-            // ID / Name / SN ဖြင့် စစ်ထုတ်ခြင်း
             const matchedOnu = allOnus.find(onu => {
                 const cId = (onu.custom_id || '').toUpperCase();
                 const name = (onu.name || '').toUpperCase();
@@ -90,7 +87,7 @@ app.get('/api/get-customer/:id', async (req, res) => {
             } else {
                 return res.json({ 
                     success: false, 
-                    message: `SmartOLT ထဲတွင် '${rawId}' အား မတွေ့ပါ။ (Total ONUs in SmartOLT: ${allOnus.length})` 
+                    message: `SmartOLT ထဲတွင် '${rawId}' အား မတွေ့ပါ။` 
                 });
             }
         }
@@ -112,7 +109,7 @@ app.get('/api/get-customer/:id', async (req, res) => {
     }
 });
 
-// Report Submit
+// Report Submit Endpoint
 app.post('/api/submit-report', async (req, res) => {
     const { customerId, customerName, issue, fatBox } = req.body;
     const formattedId = customerId.trim().toLowerCase();
