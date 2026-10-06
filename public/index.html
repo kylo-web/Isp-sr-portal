@@ -5,22 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Internet ပြဿနာ တင်ပြရန်</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f2f4f7; color: #333; padding: 20px; margin: 0; }
-        .container { max-width: 420px; background: #ffffff; padding: 25px; border-radius: 16px; margin: 20px auto; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        h2 { text-align: center; color: #1a1a1a; margin-bottom: 25px; font-size: 22px; font-weight: 700; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; padding: 20px; margin: 0; }
+        .container { max-width: 420px; background: #1e1e1e; padding: 25px; border-radius: 16px; margin: 20px auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { text-align: center; color: #ffffff; margin-bottom: 25px; font-size: 22px; font-weight: 700; }
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 10px; font-weight: 600; font-size: 14px; color: #4a5568; }
-        input[type="text"] { width: 100%; padding: 14px; box-sizing: border-box; border: 1.5px solid #e2e8f0; border-radius: 10px; background-color: #ffffff; color: #1a202c; font-size: 15px; outline: none; }
-        input[type="text"]:focus { border-color: #38a169; }
+        label { display: block; margin-bottom: 10px; font-weight: 600; font-size: 14px; color: #a0aec0; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 14px; box-sizing: border-box; border: 1.5px solid #333333; border-radius: 10px; background-color: #2a2a2a; color: #ffffff; font-size: 15px; outline: none; }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: #38a169; }
         
         .issue-grid { display: flex; flex-direction: column; gap: 10px; }
         .issue-row { display: flex; gap: 10px; }
-        .issue-btn { flex: 1; padding: 14px; background-color: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 14px; font-weight: 600; color: #2d3748; cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
-        .issue-btn.active { border-color: #38a169; background-color: #f0fff4; color: #276749; box-shadow: 0 0 0 1px #38a169; }
+        .issue-btn { flex: 1; padding: 14px; background-color: #2a2a2a; border: 1.5px solid #333333; border-radius: 10px; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
+        .issue-btn.active { border-color: #38a169; background-color: #1a382b; color: #38a169; box-shadow: 0 0 0 1px #38a169; }
 
         .submit-btn { width: 100%; padding: 16px; background-color: #27a745; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; }
         .submit-btn:hover { background-color: #218838; }
         #customerNameDisplay { margin-top: 8px; display: block; font-size: 14px; font-weight: 600; }
+        
+        #passwordGroup { display: none; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -46,6 +48,12 @@
                 </div>
             </div>
 
+            <!-- Password အသစ်တောင်းမည့် Input Box -->
+            <div class="form-group" id="passwordGroup">
+                <label>စကားဝှက်အသစ် (New Password) *</label>
+                <input type="text" id="newPassword" placeholder="ပြောင်းလဲလိုသော စကားဝှက်အသစ် ရိုက်ထည့်ပါ">
+            </div>
+
             <button type="submit" class="submit-btn">ပြဿနာအား တင်ပြမည်</button>
         </form>
     </div>
@@ -58,6 +66,19 @@
         document.querySelectorAll('.issue-btn').forEach(btn => btn.classList.remove('active'));
         element.classList.add('active');
         selectedIssueText = value;
+
+        const passGroup = document.getElementById('passwordGroup');
+        const passInput = document.getElementById('newPassword');
+
+        // Password change ရွေးထားလျှင် Input Box ဖော်ပေးရန်
+        if (value.includes('Password change')) {
+            passGroup.style.display = 'block';
+            passInput.required = true;
+        } else {
+            passGroup.style.display = 'none';
+            passInput.required = false;
+            passInput.value = '';
+        }
     }
 
     document.getElementById('customerId').addEventListener('input', async function() {
@@ -76,11 +97,11 @@
 
             if (data.success) {
                 fetchedName = data.username;
-                nameDisplay.style.color = '#27a745';
+                nameDisplay.style.color = '#38a169';
                 nameDisplay.innerText = `👤 Name: ${data.username}`;
             } else {
                 fetchedName = '';
-                nameDisplay.style.color = '#dc3545';
+                nameDisplay.style.color = '#e53e3e';
                 nameDisplay.innerText = `❌ ${data.message}`;
             }
         } catch (error) {
@@ -91,6 +112,7 @@
     document.getElementById('reportForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         const customerId = document.getElementById('customerId').value.trim();
+        const newPassword = document.getElementById('newPassword').value.trim();
 
         if (!fetchedName) {
             alert('ကျေးဇူးပြု၍ မှန်ကန်သော Customer ID ထည့်ပေးပါ');
@@ -102,6 +124,15 @@
             return;
         }
 
+        let finalIssueText = selectedIssueText;
+        if (selectedIssueText.includes('Password change')) {
+            if (!newPassword) {
+                alert('ကျေးဇူးပြု၍ စကားဝှက်အသစ် ထည့်သွင်းပေးပါ');
+                return;
+            }
+            finalIssueText = `${selectedIssueText}\n🔑 *New Password:* \`${newPassword}\``;
+        }
+
         try {
             const response = await fetch('/api/submit-report', {
                 method: 'POST',
@@ -109,20 +140,21 @@
                 body: JSON.stringify({
                     customerId: customerId,
                     customerName: fetchedName,
-                    issue: selectedIssueText
+                    issue: finalIssueText
                 })
             });
 
             const result = await response.json();
             if (result.success) {
-                alert('ပြဿနာ တင်ပြမှု အောင်မြင်ပါသည်။ Telegram ဆီသို့ Noti ပို့ပြီးပါပြီ။');
+                alert('Report အောင်မြင်စွာ တင်ပြပြီးပါပြီ။');
                 document.getElementById('reportForm').reset();
                 document.getElementById('customerNameDisplay').innerText = '';
                 document.querySelectorAll('.issue-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById('passwordGroup').style.display = 'none';
                 fetchedName = '';
                 selectedIssueText = '';
             } else {
-                alert('အမှားအယွင်းရှိပါသည်: ' + result.message);
+                alert(result.message);
             }
         } catch (err) {
             alert('Network Error ဖြစ်ပွားနေပါသည်။');
