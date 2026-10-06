@@ -11,36 +11,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const dispStatus = document.getElementById('dispStatus');
     const dispSignal = document.getElementById('dispSignal');
 
-    const issueTypeSelect = document.getElementById('issueType');
+    const issueBtns = document.querySelectorAll('.issue-btn');
     const passwordBox = document.getElementById('passwordBox');
     const newPasswordInput = document.getElementById('newPassword');
-    const otherIssueBox = document.getElementById('otherIssueBox');
-    const customIssueInput = document.getElementById('customIssue');
-    const reportForm = document.getElementById('reportForm');
+    const submitBtn = document.getElementById('submitBtn');
 
     let currentCustomerData = null;
+    let selectedIssue = '';
 
-    // 🔍 Issue Type Dropdown ပြောင်းလဲမှုကို စောင့်ကြည့်ခြင်း
-    issueTypeSelect.addEventListener('change', () => {
-        const val = issueTypeSelect.value;
-        
-        // Password change ရွေးပါက Password Box ပေါ်လာမည်
-        if (val.includes('Password change')) {
-            passwordBox.classList.remove('hidden');
-            newPasswordInput.required = true;
-        } else {
-            passwordBox.classList.add('hidden');
-            newPasswordInput.required = false;
-            newPasswordInput.value = '';
-        }
+    // 🔘 Issue Button များနှိပ်သည့်အခါ
+    issueBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            issueBtns.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
 
-        // အခြားပြဿနာ ရွေးပါက Custom Issue Box ပေါ်လာမည်
-        if (val.includes('အခြားပြဿနာ')) {
-            otherIssueBox.classList.remove('hidden');
-        } else {
-            otherIssueBox.classList.add('hidden');
-            customIssueInput.value = '';
-        }
+            selectedIssue = btn.getAttribute('data-issue');
+
+            // Password change ဖြစ်ပါက Password Box ဖော်မည်
+            if (selectedIssue.includes('Password change')) {
+                passwordBox.classList.remove('hidden');
+                newPasswordInput.focus();
+            } else {
+                passwordBox.classList.add('hidden');
+                newPasswordInput.value = '';
+            }
+        });
     });
 
     // 🔍 Search Customer ID
@@ -81,26 +76,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 📩 Submit Report
-    reportForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    submitBtn.addEventListener('click', async () => {
+        if (!currentCustomerData) {
+            alert('ကျေးဇူးပြု၍ Customer ID ကို ဦးစွာ စစ်ဆေးပေးပါ');
+            return;
+        }
 
-        if (!currentCustomerData) return;
+        if (!selectedIssue) {
+            alert('ကျေးဇူးပြု၍ ဖြစ်ပေါ်နေသော ပြဿနာတစ်ခုအား ရွေးချယ်ပေးပါ');
+            return;
+        }
 
-        let finalIssue = issueTypeSelect.value;
+        let finalIssue = selectedIssue;
 
-        // Password change ဖြစ်ပါက Input ပါဝင်အောင် ပြုပြင်ခြင်း
-        if (finalIssue.includes('Password change')) {
+        if (selectedIssue.includes('Password change')) {
             const pwd = newPasswordInput.value.trim();
             if (!pwd) {
-                alert('Password အသစ် ရိုက်ထည့်ပေးပါ');
+                alert('ကျေးဇူးပြု၍ Password အသစ် ရိုက်ထည့်ပေးပါ');
+                newPasswordInput.focus();
                 return;
             }
             finalIssue = `Password change (New Password: ${pwd})`;
-        } else if (finalIssue.includes('အခြားပြဿနာ')) {
-            const customText = customIssueInput.value.trim();
-            if (customText) {
-                finalIssue = `အခြားပြဿနာ: ${customText}`;
-            }
         }
 
         const payload = {
