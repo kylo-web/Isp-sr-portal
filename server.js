@@ -3,6 +3,8 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Express Server Rendering settings
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -17,6 +19,11 @@ const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 
 const customerLastReportTime = {};
 const fatRedLightReports = {};
+
+// 🛡️ IP Rate Limiting (Phone တစ်လုံးတည်းမှ Spam မရအောင် တားဆီးခြင်း)
+const ipReportTracker = {};
+const SPAM_WINDOW_MS = 15 * 60 * 1000; // ၁၅ မိနစ်
+const MAX_REPORTS_PER_IP = 3;         // ၁၅ မိနစ်အတွင်း အများဆုံး ၃ ကြိမ်သာ ရမည်
 
 let onuCache = [];
 let lastCacheTime = 0;
@@ -55,11 +62,9 @@ async function refreshOnuCache() {
     }
 }
 
-// 🔍 SmartOLT Object ထဲမှ dBm Value ကို ရှာဖွေဆွဲယူသည့် Function
 function extractSignalValue(onu) {
     if (!onu) return 'N/A';
 
-    // SmartOLT API တန်ဖိုးများ ဖြစ်နိုင်ခြေရှိသော Field အားလုံးကို စစ်ဆေးခြင်း
     const possibleFields = [
         onu.signal_1310,
         onu.signal_1490,
@@ -73,7 +78,6 @@ function extractSignalValue(onu) {
     for (let val of possibleFields) {
         if (val !== undefined && val !== null && val !== '') {
             let strVal = val.toString().trim();
-            // ကိန်းဂဏန်း အနုတ်လက္ခဏာ သို့မဟုတ် ဂဏန်းပါဝင်မှု စစ်ဆေးခြင်း (ဥပမာ -21.45, -23.1)
             if (strVal.match(/-?\d+(\.\d+)?/)) {
                 return strVal;
             }
@@ -83,7 +87,6 @@ function extractSignalValue(onu) {
     return 'N/A';
 }
 
-// 🔍 Real-time dBm Signal ခေါ်ယူသည့် Function (Fallback Endpoint)
 async function getExactSignalDbmApi(onuExternalId) {
     if (!onuExternalId || !SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) return 'N/A';
     const domainUrl = getDomainUrl();
@@ -151,10 +154,8 @@ app.get('/api/get-customer/:id', async (req, res) => {
         const exactFatBox = matchedOnu.odb_name || matchedOnu.address || matchedOnu.zone_name || matchedOnu.olt_name || 'Unknown-FAT';
         const status = matchedOnu.status || 'Unknown';
         
-        // ONU Details ထဲမှ Signal တန်ဖိုးအား တိုက်ရိုက်ဆွဲယူခြင်း
         let signalValue = extractSignalValue(matchedOnu);
 
-        // အကယ်၍ Cache ထဲတွင် မတွေ့ပါက API တိုက်ရိုက်ခေါ်ယူခြင်း
         if (signalValue === 'N/A') {
             const extId = matchedOnu.unique_external_id || matchedOnu.id || matchedOnu.sn;
             signalValue = await getExactSignalDbmApi(extId);
@@ -175,30 +176,48 @@ app.get('/api/get-customer/:id', async (req, res) => {
     });
 });
 
-// 📩 Report Submit Endpoint
+// 📩 Report Submit Endpoint (Spam-Protected)
 app.post('/api/submit-report', async (req, res) => {
     const { customerId, customerName, issue, fatBox, onuStatus, signal } = req.body;
     const formattedId = customerId.trim().toLowerCase();
     const now = Date.now();
     const todayDate = new Date().toDateString();
 
+    // 🛑 1. Device IP Address ကို စစ်ဆေးခြင်း
+    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-ip';
+
+    if (!ipReportTracker[userIp]) {
+        ipReportTracker[userIp] = [];
+    }
+
+    // ၁၅ မိနစ်ကျော်သွားသော Record များကို ရှင်းထုတ်ခြင်း
+    ipReportTracker[userIp] = ipReportTracker[userIp].filter(timestamp => (now - timestamp) < SPAM_WINDOW_MS);
+
+    // IP တစ်ခုတည်းမှ ၁၅ မိနစ်အတွင်း ၃ ကြိမ်ထက်ပိုလျှင် ပိတ်ဆို့ခြင်း
+    if (ipReportTracker[userIp].length >= MAX_REPORTS_PER_IP) {
+        return res.json({
+            success: false,
+            message: '⚠️ သင်သည် တိုတောင်းသော အချိန်အတွင်း Report အများအပြား ပေးပို့ထားပါသည်။ ခဏစောင့်ပြီးမှ ပြန်လည်စမ်းသပ်ပါနော်။'
+        });
+    }
+
+    // 🛑 2. Customer ID တစ်ခုတည်းအတွက် နေ့စဉ် ၁ ကြိမ်စစ်ဆေးခြင်း
+    if (customerLastReportTime[formattedId] === todayDate) {
+        return res.json({ 
+            success: false, 
+            message: 'ဒီ Customer ID အတွက် ယနေ့ Report တင်ပြီးဖြစ်ပါသည်။ မနက်ဖြန်မှ ပြန်လည်တင်ပြနိုင်ပါမည်။' 
+        });
+    }
+
     const currentFatBox = fatBox || 'Unknown-FAT';
     const currentStatus = onuStatus || 'N/A';
     
-    // Signal Power Format ပြုပြင်ခြင်း
     let formattedSignal = 'N/A';
     if (signal && signal !== 'N/A') {
         const cleanSig = signal.replace(/dBm/gi, '').trim();
         if (cleanSig && cleanSig !== '-') {
             formattedSignal = `${cleanSig} dBm`;
         }
-    }
-
-    if (customerLastReportTime[formattedId] === todayDate) {
-        return res.json({ 
-            success: false, 
-            message: 'သင်သည် ယနေ့အတွက် Report တင်ပြီးဖြစ်ပါသည်။ မနက်ဖြန်မှ ပြန်လည်တင်ပြနိုင်ပါမည်။' 
-        });
     }
 
     const reportMessage = `🚨 *ISP Report အသစ်ရောက်ရှိပါသည်* 🚨\n\n` +
@@ -217,6 +236,8 @@ app.post('/api/submit-report', async (req, res) => {
             parse_mode: 'Markdown'
         });
 
+        // Report တင်ပြီးပါက IP Tracker နှင့် Customer ID History ကို Update လုပ်မည်
+        ipReportTracker[userIp].push(now);
         customerLastReportTime[formattedId] = todayDate;
 
         if (issue.includes('မီးနီ')) {
