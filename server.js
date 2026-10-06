@@ -18,7 +18,6 @@ const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// 🧠 SmartOLT Cache Memory (၁၀ မိနစ်တစ်ကြိမ် Auto Sync လုပ်မည်)
 let onuCache = [];
 let lastCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000;
@@ -56,28 +55,35 @@ async function refreshOnuCache() {
     }
 }
 
-// 🔍 Real-time dBm Signal ခေါ်ယူသည့် Function
-async function getExactSignalDbm(onuExternalId) {
+// 🔍 SmartOLT မှ dBm Signal အား ရယူရန် Function (Multiple Fields Checking)
+async function getExactSignalDbm(onuExternalId, fallbackSignal) {
+    // 1. အကယ်၍ Cache ထဲမှာ ကိန်းဂဏန်း dBm ပါပြီးသားဆိုရင် တိုက်ရိုက်ယူမည်
+    if (fallbackSignal && typeof fallbackSignal === 'string' && (fallbackSignal.includes('-') || fallbackSignal.includes('dBm'))) {
+        return fallbackSignal;
+    }
+
     if (!onuExternalId || !SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) return 'N/A';
     const domainUrl = getDomainUrl();
 
     try {
-        // SmartOLT SNMP Signal API endpoint အား ခေါ်ယူခြင်း
+        // SmartOLT Signal API
         const res = await axios.get(`${domainUrl}/api/onu/get_onu_signal/${onuExternalId}`, {
             headers: { 'X-Token': SMARTOLT_API_KEY },
             timeout: 8000
         });
 
-        if (res.data && res.data.response) {
-            // response တွင် dBm တန်ဖိုး အတိအကျ သို့မဟုတ် rx_power ပါဝင်သည်
-            const signalVal = res.data.response.rx_power || res.data.snmp_signal || res.data.response;
-            if (typeof signalVal === 'string' || typeof signalVal === 'number') {
-                return signalVal.toString();
+        if (res.data) {
+            // SmartOLT API Fields ပုံစံအမျိုးမျိုးကို စစ်ဆေးခြင်း
+            const sig = res.data.signal || res.data.onu_signal || res.data.snmp_signal || (res.data.response ? res.data.response.rx_power : null);
+            
+            if (sig) {
+                return sig.toString();
             }
         }
     } catch (err) {
-        console.log('⚠️ Signal Fetch Warning:', err.message);
+        console.log('⚠️ Signal Fetch Error:', err.message);
     }
+    
     return 'N/A';
 }
 
@@ -117,30 +123,21 @@ app.get('/api/get-customer/:id', async (req, res) => {
     });
 
     if (matchedOnu) {
-        // FAT Box / ODB Name
         const exactFatBox = matchedOnu.odb_name || matchedOnu.address || matchedOnu.zone_name || matchedOnu.olt_name || 'Unknown-FAT';
-        
-        // SmartOLT Status
         const status = matchedOnu.status || 'Unknown';
         
-        // External ID သို့မဟုတ် ONU ID အား သုံး၍ dBm အတိအကျ ဆွဲယူခြင်း
-        const extId = matchedOnu.unique_external_id || matchedOnu.id || matchedOnu.sn;
-        let exactSignal = 'N/A';
-
-        // စာသား (Very good, warning) မဟုတ်ဘဲ ကိန်းဂဏန်း dBm ပါမပါ စစ်ဆေးခြင်း
-        const rawSignal = matchedOnu.snmp_signal || matchedOnu.signal || '';
-        if (rawSignal && (rawSignal.includes('-') || rawSignal.includes('dBm') || !isNaN(parseFloat(rawSignal)))) {
-            exactSignal = rawSignal;
-        } else if (extId) {
-            exactSignal = await getExactSignalDbm(extId);
-        }
+        // SmartOLT ၏ ID / Unique External ID
+        const extId = matchedOnu.unique_external_id || matchedOnu.id;
+        
+        // Signal Power တိုက်ရိုက်ဆွဲယူခြင်း
+        const signalValue = await getExactSignalDbm(extId, matchedOnu.snmp_signal || matchedOnu.signal);
 
         return res.json({
             success: true,
             username: matchedOnu.name || matchedOnu.custom_id || matchedOnu.sn,
             fatBox: exactFatBox,
             onuStatus: status,
-            signal: exactSignal
+            signal: signalValue
         });
     }
 
@@ -160,7 +157,6 @@ app.post('/api/submit-report', async (req, res) => {
     const currentFatBox = fatBox || 'Unknown-FAT';
     const currentStatus = onuStatus || 'N/A';
     
-    // dBm စာသား Format သပ်ရပ်အောင် ပြုပြင်ခြင်း
     let formattedSignal = 'N/A';
     if (signal && signal !== 'N/A') {
         formattedSignal = signal.includes('dBm') ? signal : `${signal} dBm`;
