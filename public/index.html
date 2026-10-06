@@ -1,223 +1,117 @@
 <!DOCTYPE html>
-<html lang="my">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Internet ပြဿနာ တင်ပြရန်</title>
-  <style>
-    body {
-      background-color: #121212;
-      color: #ffffff;
-      font-family: system-ui, -apple-system, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 16px;
-      box-sizing: border-box;
-    }
-    .container {
-      background-color: #1e1e1e;
-      padding: 24px;
-      border-radius: 16px;
-      width: 100%;
-      max-width: 400px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-      font-size: 20px;
-    }
-    .form-group {
-      margin-bottom: 16px;
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 14px;
-      color: #ccc;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #333;
-      background-color: #2a2a2a;
-      color: #fff;
-      font-size: 16px;
-      box-sizing: border-box;
-      outline: none;
-    }
-    input[type="text"]:focus {
-      border-color: #28a745;
-    }
-    .status-msg {
-      font-size: 13px;
-      margin-top: 8px;
-      display: none;
-      word-break: break-word;
-    }
-    .error { color: #ff4d4d; }
-    .success { color: #28a745; }
-    .issue-options {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .option-btn {
-      background-color: #2a2a2a;
-      border: 1px solid #333;
-      border-radius: 10px;
-      padding: 12px;
-      color: #fff;
-      text-align: left;
-      font-size: 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      transition: 0.2s;
-    }
-    .option-btn:hover { background-color: #333; }
-    .option-btn.active {
-      border-color: #28a745;
-      background-color: #1b3820;
-    }
-    .submit-btn {
-      width: 100%;
-      background-color: #28a745;
-      color: white;
-      border: none;
-      padding: 14px;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 20px;
-    }
-    .submit-btn:disabled {
-      background-color: #444;
-      cursor: not-allowed;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISP Customer Report Portal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 450px;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        h2 { text-align: center; color: #4CAF50; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, button, textarea {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #2a2a2a;
+            color: #fff;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background-color: #45a049; }
+        .hidden { display: none; }
+        .info-box {
+            background: #282828;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4CAF50;
+        }
+        .info-box p { margin: 5px 0; font-size: 14px; }
+    </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>Internet ပြဿနာ တင်ပြရန်</h2>
+    <h2>ISP Customer Support</h2>
 
-  <div class="form-group">
-    <label for="customerId">Customer ID (User ID) *</label>
-    <input type="text" id="customerId" placeholder="e.g. TTY01072" oninput="checkCustomer()">
-    <div id="statusMsg" class="status-msg"></div>
-  </div>
+    <!-- Step 1: Customer ID Search -->
+    <div id="searchSection" class="form-group">
+        <label for="customerId">Customer ID ရိုက်ထည့်ပါ:</label>
+        <input type="text" id="customerId" placeholder="Eg. TTY01072 သို့မဟုတ် 1072">
+        <button id="searchBtn">စစ်ဆေးမည်</button>
+    </div>
 
-  <label>ကြုံတွေ့နေရသော ပြဿနာ ရွေးချယ်ပါ *</label>
-  <div class="issue-options">
-    <button class="option-btn" onclick="selectIssue(this, 'မီးနီ')">🔴 မီးနီ</button>
-    <button class="option-btn" onclick="selectIssue(this, 'လိုင်းနှေး')">🐢 လိုင်းနှေး</button>
-    <button class="option-btn" onclick="selectIssue(this, 'PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ')">🟡 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ</button>
-    <button class="option-btn" onclick="selectIssue(this, 'Power တစ်ခုပဲလင်း')">⚡ Power တစ်ခုပဲလင်း</button>
-    <button class="option-btn" onclick="selectIssue(this, 'No Power (မီးလုံးဝမလာပါ)')">🔌 No Power (မီးလုံးဝမလာပါ)</button>
-    <button class="option-btn" onclick="selectIssue(this, 'Password change (စကားဝှက်ပြောင်းရန်)')">🔑 Password change (စကားဝှက်ပြောင်းရန်)</button>
-  </div>
+    <!-- Loading Indicator -->
+    <div id="loading" class="hidden" style="text-align:center; padding:10px;">
+        <p>⏳ အချက်အလက်များ စစ်ဆေးနေပါသည်။ ခဏစောင့်ပါ...</p>
+    </div>
 
-  <button class="submit-btn" id="submitBtn" onclick="submitReport()" disabled>ပြဿနာအား တင်ပြမည်</button>
+    <!-- Step 2: Customer Details & Form -->
+    <div id="reportSection" class="hidden">
+        <div class="info-box">
+            <p>👤 <b>Name:</b> <span id="dispName">-</span></p>
+            <p>🆔 <b>Customer ID:</b> <span id="dispId">-</span></p>
+            <p>📦 <b>FAT Box:</b> <span id="dispFat">-</span></p>
+            <p>📡 <b>Status:</b> <span id="dispStatus">-</span></p>
+            <p>📶 <b>Signal Power:</b> <span id="dispSignal">-</span></p>
+        </div>
+
+        <form id="reportForm">
+            <div class="form-group">
+                <label for="issueType">ကြုံတွေ့နေရသော ပြဿနာကို ရွေးပါ:</label>
+                <select id="issueType" required>
+                    <option value="">-- ပြဿနာအမျိုးအစား ရွေးချယ်ပါ --</option>
+                    <option value="မီးနီ">🔴 မီးနီ (LOS / Signal Drop)</option>
+                    <option value="Power တစ်ခုပဲလင်း">⚡ Power တစ်ခုပဲလင်း</option>
+                    <option value="No Power (မီးလုံးဝမလာပါ)">🔌 No Power (မီးလုံးဝမလာပါ)</option>
+                    <option value="Password change (စကားဝှက်ပြောင်းရန်)">🔑 Password change (စကားဝှက်ပြောင်းရန်)</option>
+                    <option value="အခြားပြဿနာ">❓ အခြားပြဿနာ</option>
+                </select>
+            </div>
+
+            <!-- Password Change Input Box (Password change ရွေးမှ ပေါ်မည်) -->
+            <div id="passwordBox" class="form-group hidden">
+                <label for="newPassword">🔑 ပြောင်းလဲချင်သော Password အသစ် ရိုက်ထည့်ပါ:</label>
+                <input type="text" id="newPassword" placeholder="Password အသစ် ရိုက်ထည့်ပါ">
+            </div>
+
+            <!-- Other Issue Description (အခြားပြဿနာ သို့မဟုတ် အသေးစိတ်) -->
+            <div id="otherIssueBox" class="form-group hidden">
+                <label for="customIssue">အသေးစိတ် ဖော်ပြပေးပါ:</label>
+                <textarea id="customIssue" rows="3" placeholder="ဖြစ်ပေါ်နေသော ပြဿနာအား အသေးစိတ် ရေးသားပေးပါ"></textarea>
+            </div>
+
+            <button type="submit" id="submitBtn">ပြဿနာအား တင်ပြမည်</button>
+        </form>
+    </div>
 </div>
 
-<script>
-  let selectedIssue = '';
-  let customerData = null;
-  let typingTimer;
-
-  function checkCustomer() {
-    clearTimeout(typingTimer);
-    const idInput = document.getElementById('customerId').value.trim();
-    const statusMsg = document.getElementById('statusMsg');
-    const submitBtn = document.getElementById('submitBtn');
-
-    if (!idInput) {
-      statusMsg.style.display = 'none';
-      submitBtn.disabled = true;
-      customerData = null;
-      return;
-    }
-
-    typingTimer = setTimeout(async () => {
-      statusMsg.style.display = 'block';
-      statusMsg.className = 'status-msg';
-      statusMsg.innerText = '⏳ SmartOLT ထဲတွင် ရှာဖွေနေပါသည်...';
-
-      try {
-        const response = await fetch(`/api/get-customer/${encodeURIComponent(idInput)}`);
-        const data = await response.json();
-
-        if (data.success) {
-          customerData = data;
-          statusMsg.className = 'status-msg success';
-          statusMsg.innerText = `✅ Customer: ${data.username} (${data.fatBox})`;
-          if (selectedIssue) submitBtn.disabled = false;
-        } else {
-          customerData = null;
-          submitBtn.disabled = true;
-          statusMsg.className = 'status-msg error';
-          statusMsg.innerText = `❌ ${data.message}`;
-        }
-      } catch (err) {
-        customerData = null;
-        submitBtn.disabled = true;
-        statusMsg.className = 'status-msg error';
-        statusMsg.innerText = '❌ Server သို့ ချိတ်ဆက်၍ မရပါ';
-      }
-    }, 600);
-  }
-
-  function selectIssue(element, issueName) {
-    document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('active'));
-    element.classList.add('active');
-    selectedIssue = issueName;
-
-    if (customerData) {
-      document.getElementById('submitBtn').disabled = false;
-    }
-  }
-
-  async function submitReport() {
-    const customerId = document.getElementById('customerId').value.trim();
-    if (!customerData || !selectedIssue) return;
-
-    const submitBtn = document.getElementById('submitBtn');
-    submitBtn.disabled = true;
-    submitBtn.innerText = 'ခဏစောင့်ပါ...';
-
-    try {
-      const response = await fetch('/api/submit-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customerId,
-          customerName: customerData.username,
-          fatBox: customerData.fatBox,
-          onuStatus: customerData.onuStatus,
-          signal: customerData.signal,
-          issue: selectedIssue
-        })
-      });
-
-      const resData = await response.json();
-      alert(resData.message);
-      if (resData.success) location.reload();
-    } catch (e) {
-      alert('Report ပို့ရာတွင် အမှားဖြစ်ပွားခဲ့ပါသည်');
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.innerText = 'ပြဿနာအား တင်ပြမည်';
-    }
-  }
-</script>
-
+<script src="script.js"></script>
 </body>
 </html>
