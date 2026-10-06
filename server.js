@@ -6,49 +6,52 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-// 🔑 Telegram & SmartOLT Environment Configs
+// 🔑 Configs
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
-let domainInput = process.env.SMARTOLT_DOMAIN || '';
-domainInput = domainInput.replace(/^https?:\/\//, '').replace(/\/$/, '');
+let rawDomain = process.env.SMARTOLT_DOMAIN || '';
+rawDomain = rawDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-const SMARTOLT_DOMAIN = domainInput;
+const SMARTOLT_DOMAIN = rawDomain;
 const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// Customer ID ပုံစံအမျိုးမျိုး ထုတ်ပေးရန် (tty00001, TTY00001, tty1, 1)
+// Helper - Normalize ID
 function generatePossibleIDs(rawId) {
     const cleaned = rawId.trim();
     const match = cleaned.match(/^([a-zA-Z]+)?(\d+)$/);
 
-    if (!match) return [cleaned.toUpperCase()];
+    if (!match) return [cleaned.toUpperCase(), cleaned.toLowerCase()];
 
     const prefix = (match[1] || 'TTY').toUpperCase();
-    const numStr = match[2];
-    const num = parseInt(numStr, 10);
+    const num = parseInt(match[2], 10);
 
     const ids = new Set();
     ids.add(cleaned.toUpperCase());
+    ids.add(cleaned.toLowerCase());
     ids.add(`${prefix}${num}`);
     ids.add(`${prefix}${String(num).padStart(3, '0')}`);
     ids.add(`${prefix}${String(num).padStart(4, '0')}`);
     ids.add(`${prefix}${String(num).padStart(5, '0')}`);
-    ids.add(String(num));
 
     return Array.from(ids);
 }
 
-// 🔍 SmartOLT API Customer Lookup
+// 🔍 SmartOLT Customer Fetch Endpoint
 app.get('/api/get-customer/:id', async (req, res) => {
     const rawId = req.params.id.trim();
     const possibleIds = generatePossibleIDs(rawId);
 
+    // 1. Env Check
     if (!SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) {
-        console.error('SmartOLT Config Missing!');
-        return res.json({ success: false, message: 'SmartOLT API အချက်အလက် မပြည့်စုံပါ' });
+        console.error('❌ Missing SmartOLT Env Variables');
+        return res.json({ 
+            success: false, 
+            message: 'Server Error: Render Environment Variable (SMARTOLT_DOMAIN / SMARTOLT_API_KEY) မရှိသေးပါ' 
+        });
     }
 
     const domainUrl = SMARTOLT_DOMAIN.includes('.') 
@@ -56,69 +59,60 @@ app.get('/api/get-customer/:id', async (req, res) => {
         : `https://${SMARTOLT_DOMAIN}.smartolt.com`;
 
     try {
-        let foundOnu = null;
+        // SmartOLT API တိုက်ရိုက် ခေါ်ယူခြင်း
+        const listUrl = `${domainUrl}/api/onu/get_all_onus_details`;
+        const response = await axios.get(listUrl, {
+            headers: { 
+                'X-Token': SMARTOLT_API_KEY,
+                'Accept': 'application/json'
+            },
+            timeout: 12000
+        });
 
-        // နည်းလမ်း (၁) - ONUs အားလုံးကို ဆွဲယူပြီး တိကျစွာ တိုက်ဆိုင်စစ်ဆေးခြင်း
-        try {
-            const listUrl = `${domainUrl}/api/onu/get_all_onus_details`;
-            const response = await axios.get(listUrl, {
-                headers: { 
-                    'X-Token': SMARTOLT_API_KEY,
-                    'Accept': 'application/json'
-                },
-                timeout: 10000
+        if (response.data && response.data.onus && Array.isArray(response.data.onus)) {
+            const allOnus = response.data.onus;
+
+            // ID / Name / SN ဖြင့် စစ်ထုတ်ခြင်း
+            const matchedOnu = allOnus.find(onu => {
+                const cId = (onu.custom_id || '').toUpperCase();
+                const name = (onu.name || '').toUpperCase();
+                const sn = (onu.sn || '').toUpperCase();
+
+                return possibleIds.some(pId => cId === pId || name.includes(pId) || sn === pId);
             });
 
-            if (response.data && response.data.onus && Array.isArray(response.data.onus)) {
-                const allOnus = response.data.onus;
-                foundOnu = allOnus.find(onu => {
-                    const cId = (onu.custom_id || '').toUpperCase();
-                    const name = (onu.name || '').toUpperCase();
-                    const sn = (onu.sn || '').toUpperCase();
-                    return possibleIds.some(pId => cId === pId || name.includes(pId) || sn === pId);
+            if (matchedOnu) {
+                return res.json({
+                    success: true,
+                    username: matchedOnu.name || matchedOnu.custom_id,
+                    fatBox: matchedOnu.zone_name || matchedOnu.odb_name || matchedOnu.address || 'Unknown-FAT'
+                });
+            } else {
+                return res.json({ 
+                    success: false, 
+                    message: `SmartOLT ထဲတွင် '${rawId}' အား မတွေ့ပါ။ (Total ONUs in SmartOLT: ${allOnus.length})` 
                 });
             }
-        } catch (e) {
-            console.log('Method 1 search failed, trying method 2:', e.message);
         }
 
-        // နည်းလမ်း (၂) - Direct Custom ID Endpoint ဖြင့် ရှာဖွေခြင်း
-        if (!foundOnu) {
-            for (const searchId of possibleIds) {
-                try {
-                    const directUrl = `${domainUrl}/api/onu/get_onu_details_by_custom_id/${encodeURIComponent(searchId)}`;
-                    const response = await axios.get(directUrl, {
-                        headers: { 'X-Token': SMARTOLT_API_KEY },
-                        timeout: 5000
-                    });
-
-                    if (response.data && response.data.status === true && response.data.onu_details) {
-                        foundOnu = response.data.onu_details;
-                        break;
-                    }
-                } catch (err) {
-                    continue;
-                }
-            }
-        }
-
-        if (foundOnu) {
-            return res.json({
-                success: true,
-                username: foundOnu.name || foundOnu.custom_id,
-                fatBox: foundOnu.zone_name || foundOnu.odb_name || foundOnu.address || 'Unknown-FAT'
-            });
-        }
-
-        res.json({ success: false, message: 'SmartOLT ထဲတွင် Customer ID မတွေ့ရှိပါ' });
+        res.json({ success: false, message: 'SmartOLT ထဲတွင် Customer Data မရှိပါ' });
 
     } catch (error) {
-        console.error('SmartOLT General Error:', error.message);
-        res.json({ success: false, message: 'SmartOLT ချိတ်ဆက်မှု အဆင်မပြေပါ' });
+        console.error('SmartOLT Error Details:', error.response ? error.response.status : error.message);
+        
+        let errMsg = 'SmartOLT ချိတ်ဆက်မှု မအောင်မြင်ပါ';
+        if (error.response) {
+            if (error.response.status === 401) errMsg = 'SmartOLT API Key မှားယွင်းနေပါသည်။ (401 Unauthorized)';
+            if (error.response.status === 404) errMsg = 'SmartOLT Domain URL မှားယွင်းနေပါသည်။ (404 Not Found)';
+        } else if (error.code === 'ECONNABORTED') {
+            errMsg = 'SmartOLT API တုံ့ပြန်မှု ကြာမြင့်နေပါသည် (Timeout)';
+        }
+
+        res.json({ success: false, message: errMsg });
     }
 });
 
-// 📩 Report Submit API
+// Report Submit
 app.post('/api/submit-report', async (req, res) => {
     const { customerId, customerName, issue, fatBox } = req.body;
     const formattedId = customerId.trim().toLowerCase();
