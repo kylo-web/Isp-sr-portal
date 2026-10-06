@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const dispName = document.getElementById('dispName');
     const dispId = document.getElementById('dispId');
+    const dispAddress = document.getElementById('dispAddress');
     const dispFat = document.getElementById('dispFat');
     const dispStatus = document.getElementById('dispStatus');
     const dispSignal = document.getElementById('dispSignal');
@@ -19,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentCustomerData = null;
     let selectedIssue = '';
 
-    // 🔘 Issue Button များနှိပ်သည့်အခါ
+    // Issue Buttons Click Event
     issueBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             issueBtns.forEach(b => b.classList.remove('selected'));
@@ -27,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             selectedIssue = btn.getAttribute('data-issue');
 
-            // Password change ဖြစ်ပါက Password Box ဖော်မည်
             if (selectedIssue.includes('Password change')) {
                 passwordBox.classList.remove('hidden');
                 newPasswordInput.focus();
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 🔍 Search Customer ID
+    // Search Customer
     searchBtn.addEventListener('click', async () => {
         const id = customerIdInput.value.trim();
         if (!id) {
@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentCustomerData = { ...data, inputId: id };
                 dispName.textContent = data.username || '-';
                 dispId.textContent = id.toUpperCase();
+                dispAddress.textContent = data.address || '-';
                 dispFat.textContent = data.fatBox || '-';
                 dispStatus.textContent = data.onuStatus || '-';
                 dispSignal.textContent = data.signal && data.signal !== 'N/A' 
@@ -75,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 📩 Submit Report
+    // Submit Report
     submitBtn.addEventListener('click', async () => {
         if (!currentCustomerData) {
             alert('ကျေးဇူးပြု၍ Customer ID ကို ဦးစွာ စစ်ဆေးပေးပါ');
@@ -102,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             customerId: currentCustomerData.inputId,
             customerName: currentCustomerData.username,
+            address: currentCustomerData.address,
             fatBox: currentCustomerData.fatBox,
             onuStatus: currentCustomerData.onuStatus,
             signal: currentCustomerData.signal,

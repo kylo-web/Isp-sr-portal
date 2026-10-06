@@ -3,7 +3,6 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Express Server Rendering settings
 app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.static('public'));
@@ -20,10 +19,9 @@ const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// 🛡️ IP Rate Limiting (Phone တစ်လုံးတည်းမှ Spam မရအောင် တားဆီးခြင်း)
 const ipReportTracker = {};
-const SPAM_WINDOW_MS = 15 * 60 * 1000; // ၁၅ မိနစ်
-const MAX_REPORTS_PER_IP = 3;         // ၁၅ မိနစ်အတွင်း အများဆုံး ၃ ကြိမ်သာ ရမည်
+const SPAM_WINDOW_MS = 15 * 60 * 1000; 
+const MAX_REPORTS_PER_IP = 3;         
 
 let onuCache = [];
 let lastCacheTime = 0;
@@ -115,7 +113,6 @@ async function getExactSignalDbmApi(onuExternalId) {
     return 'N/A';
 }
 
-// 🔍 SmartOLT Lookup Endpoint
 app.get('/api/get-customer/:id', async (req, res) => {
     const searchKey = req.params.id.trim().toUpperCase();
 
@@ -151,7 +148,8 @@ app.get('/api/get-customer/:id', async (req, res) => {
     });
 
     if (matchedOnu) {
-        const exactFatBox = matchedOnu.odb_name || matchedOnu.address || matchedOnu.zone_name || matchedOnu.olt_name || 'Unknown-FAT';
+        const exactFatBox = matchedOnu.odb_name || matchedOnu.zone_name || matchedOnu.olt_name || 'Unknown-FAT';
+        const address = matchedOnu.address || matchedOnu.location || 'N/A';
         const status = matchedOnu.status || 'Unknown';
         
         let signalValue = extractSignalValue(matchedOnu);
@@ -164,6 +162,7 @@ app.get('/api/get-customer/:id', async (req, res) => {
         return res.json({
             success: true,
             username: matchedOnu.name || matchedOnu.custom_id || matchedOnu.sn,
+            address: address,
             fatBox: exactFatBox,
             onuStatus: status,
             signal: signalValue
@@ -176,24 +175,20 @@ app.get('/api/get-customer/:id', async (req, res) => {
     });
 });
 
-// 📩 Report Submit Endpoint (Spam-Protected)
 app.post('/api/submit-report', async (req, res) => {
-    const { customerId, customerName, issue, fatBox, onuStatus, signal } = req.body;
+    const { customerId, customerName, address, issue, fatBox, onuStatus, signal } = req.body;
     const formattedId = customerId.trim().toLowerCase();
     const now = Date.now();
     const todayDate = new Date().toDateString();
 
-    // 🛑 1. Device IP Address ကို စစ်ဆေးခြင်း
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-ip';
 
     if (!ipReportTracker[userIp]) {
         ipReportTracker[userIp] = [];
     }
 
-    // ၁၅ မိနစ်ကျော်သွားသော Record များကို ရှင်းထုတ်ခြင်း
     ipReportTracker[userIp] = ipReportTracker[userIp].filter(timestamp => (now - timestamp) < SPAM_WINDOW_MS);
 
-    // IP တစ်ခုတည်းမှ ၁၅ မိနစ်အတွင်း ၃ ကြိမ်ထက်ပိုလျှင် ပိတ်ဆို့ခြင်း
     if (ipReportTracker[userIp].length >= MAX_REPORTS_PER_IP) {
         return res.json({
             success: false,
@@ -201,7 +196,6 @@ app.post('/api/submit-report', async (req, res) => {
         });
     }
 
-    // 🛑 2. Customer ID တစ်ခုတည်းအတွက် နေ့စဉ် ၁ ကြိမ်စစ်ဆေးခြင်း
     if (customerLastReportTime[formattedId] === todayDate) {
         return res.json({ 
             success: false, 
@@ -211,65 +205,190 @@ app.post('/api/submit-report', async (req, res) => {
 
     const currentFatBox = fatBox || 'Unknown-FAT';
     const currentStatus = onuStatus || 'N/A';
+    const currentAddress = address || 'N/A';
     
     let formattedSignal = 'N/A';
     if (signal && signal !== 'N/A') {
         const cleanSig = signal.replace(/dBm/gi, '').trim();
         if (cleanSig && cleanSig !== '-') {
-            formattedSignal = `${cleanSig} dBm`;
+cat << 'EOF' > public/index.html
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISP Customer Support</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-    }
-
-    const reportMessage = `🚨 *ISP Report အသစ်ရောက်ရှိပါသည်* 🚨\n\n` +
-                          `👤 *Customer Name:* ${customerName}\n` +
-                          `🆔 *Customer ID:* ${customerId.toUpperCase()}\n` +
-                          `📦 *FAT Box:* ${currentFatBox}\n` +
-                          `📡 *SmartOLT Status:* ${currentStatus}\n` +
-                          `📶 *Signal Power:* ${formattedSignal}\n` +
-                          `⚠️ *Issue:* ${issue}\n` +
-                          `⏰ *Time:* ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Yangon' })}`;
-
-    try {
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-            chat_id: TELEGRAM_CHAT_ID,
-            text: reportMessage,
-            parse_mode: 'Markdown'
-        });
-
-        // Report တင်ပြီးပါက IP Tracker နှင့် Customer ID History ကို Update လုပ်မည်
-        ipReportTracker[userIp].push(now);
-        customerLastReportTime[formattedId] = todayDate;
-
-        if (issue.includes('မီးနီ')) {
-            if (!fatRedLightReports[currentFatBox]) {
-                fatRedLightReports[currentFatBox] = [];
-            }
-
-            const oneHourAgo = now - 60 * 60 * 1000;
-            fatRedLightReports[currentFatBox] = fatRedLightReports[currentFatBox].filter(timestamp => timestamp > oneHourAgo);
-            fatRedLightReports[currentFatBox].push(now);
-
-            if (fatRedLightReports[currentFatBox].length >= 3) {
-                const warningMessage = `⚠️ *FAT BOX WARNING ALERT!* ⚠️\n\n` +
-                                       `📍 *FAT Box:* ${currentFatBox}\n` +
-                                       `⚡ *Status:* ၁ နာရီအတွင်း မီးနီ Report (${fatRedLightReports[currentFatBox].length}) ခု ဝင်ရောက်ထားပါသည်။\n` +
-                                       `❗ Main Fiber Line သို့မဟုတ် FAT Box အပိုင်း အဓိက ပြဿနာရှိနိုင်ပါသဖြင့် အမြန်ဆုံး စစ်ဆေးပေးပါရန်။`;
-
-                await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: TELEGRAM_CHAT_ID,
-                    text: warningMessage,
-                    parse_mode: 'Markdown'
-                });
-            }
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
         }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background-color: #1e1e1e;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        h2 {
+            text-align: center;
+            color: #4caf50;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 22px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background-color: #2a2a2a;
+            color: #fff;
+            font-size: 15px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+        input::placeholder {
+            color: #777;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: #4caf50;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background-color: #4caf50;
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .issue-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            background-color: #2a2a2a;
+            color: #ffffff;
+            font-size: 15px;
+            text-align: left;
+            margin-bottom: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .issue-btn:hover {
+            background-color: #333;
+        }
+        .issue-btn.selected {
+            border-color: #4caf50;
+            background-color: #223a24;
+        }
+        .info-box {
+            background: #282828;
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4caf50;
+        }
+        .info-box p {
+            margin: 6px 0;
+            font-size: 14px;
+            color: #ddd;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
 
-        res.json({ success: true, message: 'Report အောင်မြင်စွာ ပို့ပြီးပါပြီ' });
-    } catch (error) {
-        console.error('Telegram Error:', error.message);
-        res.json({ success: false, message: 'Telegram Noti ပို့ရာတွင် အမှားရှိပါသည်' });
-    }
-});
+<div class="container">
+    <h2>ISP Customer Support</h2>
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+    <!-- Step 1: Customer Search -->
+    <div id="searchSection">
+        <label for="customerId">Customer ID ရိုက်ထည့်ပါ:</label>
+        <input type="text" id="customerId" placeholder="Eg. TTY01072 သို့မဟုတ် 1072">
+        <button type="button" class="btn" id="searchBtn">စစ်ဆေးမည်</button>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loading" class="hidden" style="text-align: center; padding: 20px 0;">
+        <p style="color: #4caf50;">⏳ အချက်အလက်များ စစ်ဆေးနေပါသည်...</p>
+    </div>
+
+    <!-- Step 2: Customer Details & Issue Buttons -->
+    <div id="reportSection" class="hidden">
+        <div class="info-box">
+            <p>👤 <b>Name:</b> <span id="dispName">-</span></p>
+            <p>🆔 <b>Customer ID:</b> <span id="dispId">-</span></p>
+            <p>🏠 <b>Address:</b> <span id="dispAddress">-</span></p>
+            <p>📦 <b>FAT Box:</b> <span id="dispFat">-</span></p>
+            <p>📡 <b>Status:</b> <span id="dispStatus">-</span></p>
+            <p>📶 <b>Signal Power:</b> <span id="dispSignal">-</span></p>
+        </div>
+
+        <label>ဖြစ်ပေါ်နေသော ပြဿနာအား ရွေးပါ:</label>
+
+        <!-- ပြဿနာ Options ၆ မျိုး -->
+        <button type="button" class="issue-btn" data-issue="LOS / မီးနီ 🔴">
+            🔴 LOS / မီးနီ
+        </button>
+
+        <button type="button" class="issue-btn" data-issue="လိုင်းနှေး 🐢">
+            🐢 လိုင်းနှေး
+        </button>
+
+        <button type="button" class="issue-btn" data-issue="PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းမရ">
+            📶 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းမရ
+        </button>
+        
+        <button type="button" class="issue-btn" data-issue="Power တစ်ခုပဲလင်း">
+            ⚡ Power တစ်ခုပဲလင်း
+        </button>
+        
+        <button type="button" class="issue-btn" data-issue="No Power (မီးလုံးဝမလာပါ)">
+            🔌 No Power (မီးလုံးဝမလာပါ)
+        </button>
+        
+        <button type="button" class="issue-btn" data-issue="Password change (စကားဝှက်ပြောင်းရန်)" id="pwdBtn">
+            🔑 Password change (စကားဝှက်ပြောင်းရန်)
+        </button>
+
+        <!-- Password Input Box -->
+        <div id="passwordBox" class="hidden" style="margin-top: 10px;">
+            <label for="newPassword">🔑 Password အသစ် ရိုက်ထည့်ပါ:</label>
+            <input type="text" id="newPassword" placeholder="ပြောင်းလဲချင်သော Password အသစ်">
+        </div>
+
+        <button type="button" class="btn" id="submitBtn" style="margin-top: 15px;">ပြဿနာအား တင်ပြမည်</button>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
