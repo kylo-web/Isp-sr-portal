@@ -6,9 +6,8 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-// 🔑 ဒီနေရာတွင် မိမိ၏ Telegram Bot Token နှင့် Chat ID အမှန်ကို ထည့်ပါ
-const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
-const TELEGRAM_CHAT_ID = '-1004295109530';
+const TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
+const TELEGRAM_CHAT_ID = 'YOUR_TELEGRAM_CHAT_ID_HERE';
 
 // Customer Database
 const mockDatabase = {
@@ -43,7 +42,6 @@ app.post('/api/submit-report', async (req, res) => {
     const customerData = mockDatabase[formattedId];
     const fatBox = customerData ? customerData.fatBox : 'Unknown-FAT';
 
-    // Rule 1: Customer တစ်ဦးလျှင် ၁ နေ့ ၁ ကြိမ်
     if (customerLastReportTime[formattedId] === todayDate) {
         return res.json({ 
             success: false, 
@@ -67,7 +65,6 @@ app.post('/api/submit-report', async (req, res) => {
 
         customerLastReportTime[formattedId] = todayDate;
 
-        // Rule 2: FAT Box 1 နာရီအတွင်း မီးနီ 3 ခုအထက် Warning Alert
         if (issue.includes('မီးနီ')) {
             if (!fatRedLightReports[fatBox]) {
                 fatRedLightReports[fatBox] = [];
@@ -100,4 +97,11 @@ app.post('/api/submit-report', async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    
+    // Server မအိပ်သွားစေရန် ၁၄ မိနစ်တစ်ကြိမ် Self-Ping လုပ်ပေးခြင်း
+    setInterval(() => {
+        axios.get(`https://isp-sr-portal-11.onrender.com/`)
+            .then(() => console.log('Self-ping successful'))
+            .catch(err => console.error('Self-ping failed:', err.message));
+    }, 14 * 60 * 1000);
 });
