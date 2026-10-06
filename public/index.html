@@ -5,34 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISP Reporting Portal</title>
     <style>
-        body { font-family: sans-serif; background-color: #121212; color: #ffffff; padding: 20px; }
-        .container { max-width: 450px; background: #1e1e1e; padding: 20px; border-radius: 8px; margin: auto; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; }
-        input[type="text"] { width: 100%; padding: 12px; box-sizing: border-box; border: 1px solid #333; border-radius: 6px; background-color: #2a2a2a; color: #fff; font-size: 16px; }
+        body { font-family: sans-serif; background-color: #121212; color: #ffffff; padding: 20px; margin: 0; }
+        .container { max-width: 420px; background: #1e1e1e; padding: 25px; border-radius: 10px; margin: 20px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        h2 { text-align: center; color: #4caf50; margin-bottom: 20px; }
+        .form-group { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
+        input[type="text"], select { width: 100%; padding: 12px; box-sizing: border-box; border: 1px solid #333; border-radius: 6px; background-color: #2a2a2a; color: #fff; font-size: 15px; outline: none; }
+        input[type="text"]:focus, select:focus { border-color: #4caf50; }
+        button { width: 100%; padding: 14px; background-color: #4caf50; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #45a049; }
+        #customerNameDisplay { margin-top: 8px; display: block; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="form-group">
-            <label>Customer ID (User ID) *</label>
+        <h2>ISP Reporting Portal</h2>
+        <form id="reportForm">
+            <div class="form-group">
+                <label>Customer ID (User ID) *</label>
+                <input type="text" id="customerId" placeholder="ဥပမာ - Tty01072" required autocomplete="off">
+                <small id="customerNameDisplay"></small>
+            </div>
 
-            <!-- Customer ID ထည့်ရန် အကွက် -->
-  <small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
+            <div class="form-group">
+                <label>ကြုံတွေ့နေရသော ပြဿနာ *</label>
+                <select id="issue" required>
+                    <option value="">-- ပြဿနာအမျိုးအစား ရွေးပါ --</option>
+                    <option value="🔴 မီးနီပြနေခြင်း">🔴 မီးနီပြနေခြင်း</option>
+                    <option value="🐢 လိုင်းအလွန်နှေးခြင်း">🐢 လိုင်းအလွန်နှေးခြင်း</option>
+                    <option value="🟡 PON မီးခုန်နေခြင်း">🟡 PON မီးခုန်နေခြင်း</option>
+                    <option value="⚡ Power တစ်ခုပဲလင်းခြင်း">⚡ Power တစ်ခုပဲလင်းခြင်း</option>
+                </select>
+            </div>
 
-            <!-- နာမည် ပေါ်လာမည့် နေရာ -->
-            <small id="customerNameDisplay" style="color: #4caf50; font-weight: bold; margin-top: 8px; display: block; font-size: 14px;"></small>
-        </div>
+            <button type="submit" id="submitBtn">ပြဿနာအား တင်ပြမည်</button>
+        </form>
     </div>
 
-    <!-- API လှမ်းခေါ်မည့် JavaScript (ဖိုင်ရဲ့ အောက်ဆုံးတွင် ထည့်ရပါမည်) -->
     <script>
+    let fetchedName = '';
+
     document.getElementById('customerId').addEventListener('input', async function() {
         const customerId = this.value.trim();
         const nameDisplay = document.getElementById('customerNameDisplay');
         
         if (!customerId) {
             nameDisplay.innerText = '';
+            fetchedName = '';
             return;
         }
 
@@ -41,37 +60,34 @@
             const data = await response.json();
 
             if (data.success) {
+                fetchedName = data.username;
+                nameDisplay.style.color = '#4caf50';
                 nameDisplay.innerText = `👤 Name: ${data.username}`;
             } else {
+                fetchedName = '';
+                nameDisplay.style.color = '#f44336';
                 nameDisplay.innerText = `❌ ${data.message}`;
             }
         } catch (error) {
             console.error('Error:', error);
         }
-    });<script>
-document.getElementById('customerId').addEventListener('input', async function() {
-    const customerId = this.value.trim();
-    const nameDisplay = document.getElementById('customerNameDisplay');
-    
-    if (!customerId) {
-        nameDisplay.innerText = '';
-        return;
-    }
+    });
 
-    try {
-        const response = await fetch(`/api/get-customer/${customerId}`);
-        const data = await response.json();
+    document.getElementById('reportForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const customerId = document.getElementById('customerId').value.trim();
+        const issue = document.getElementById('issue').value;
 
-        if (data.success) {
-            nameDisplay.innerText = `👤 Name: ${data.username}`;
-        } else {
-            nameDisplay.innerText = `❌ ${data.message}`;
+        if (!fetchedName) {
+            alert('ကျေးဇူးပြု၍ မှန်ကန်သော Customer ID ထည့်ပေးပါ');
+            return;
         }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-});
-</script>
+
+        alert(`Report အောင်မြင်စွာ တင်ပြီးပါပြီ!\n\nID: ${customerId}\nName: ${fetchedName}\nIssue: ${issue}`);
+        document.getElementById('reportForm').reset();
+        document.getElementById('customerNameDisplay').innerText = '';
+        fetchedName = '';
+    });
     </script>
 </body>
 </html>
