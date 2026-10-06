@@ -18,28 +18,31 @@ const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// Customer ID ပုံစံအမျိုးမျိုး စမ်းသပ်ရန်
+// Customer ID ပုံစံအမျိုးမျိုး ပြောင်းလဲပေးသည့် Function
 function generatePossibleIDs(rawId) {
     const cleaned = rawId.trim();
     const match = cleaned.match(/^([a-zA-Z]+)?(\d+)$/);
 
-    if (!match) return [cleaned.toUpperCase(), cleaned.toLowerCase()];
-
-    const prefix = (match[1] || 'TTY').toUpperCase();
-    const num = parseInt(match[2], 10);
-
     const ids = new Set();
+    ids.add(cleaned);
     ids.add(cleaned.toUpperCase());
     ids.add(cleaned.toLowerCase());
-    ids.add(`${prefix}${num}`);
-    ids.add(`${prefix}${String(num).padStart(3, '0')}`);
-    ids.add(`${prefix}${String(num).padStart(4, '0')}`);
-    ids.add(`${prefix}${String(num).padStart(5, '0')}`);
+
+    if (match) {
+        const prefix = (match[1] || 'TTY').toUpperCase();
+        const num = parseInt(match[2], 10);
+
+        ids.add(`${prefix}${num}`);
+        ids.add(`${prefix}${String(num).padStart(3, '0')}`);
+        ids.add(`${prefix}${String(num).padStart(4, '0')}`);
+        ids.add(`${prefix}${String(num).padStart(5, '0')}`);
+        ids.add(`${num}`); // နံပါတ်ချည်းပဲ
+    }
 
     return Array.from(ids);
 }
 
-// 🔍 SmartOLT API Customer Lookup (Optimized for 429 Error Fix)
+// 🔍 Multi-Endpoint SmartOLT Search API
 app.get('/api/get-customer/:id', async (req, res) => {
     const rawId = req.params.id.trim();
     const possibleIds = generatePossibleIDs(rawId);
@@ -57,35 +60,34 @@ app.get('/api/get-customer/:id', async (req, res) => {
 
     let foundOnu = null;
 
-    // Direct Customer ID Endpoint ဖြင့်သာ ကွက်တိ တိုက်ရိုက် ရှာဖွေမည်
     for (const searchId of possibleIds) {
-        try {
-            const directUrl = `${domainUrl}/api/onu/get_onu_details_by_custom_id/${encodeURIComponent(searchId)}`;
-            const response = await axios.get(directUrl, {
-                headers: { 'X-Token': SMARTOLT_API_KEY },
-                timeout: 5000
-            });
+        if (foundOnu) break;
 
-            if (response.data && response.data.status === true && response.data.onu_details) {
-                foundOnu = response.data.onu_details;
-                break; // တွေ့ရင် Loop ကို ရပ်မည်
+        // နည်းလမ်း (၁) - Custom ID ဖြင့် ရှာမည်
+        try {
+            const url1 = `${domainUrl}/api/onu/get_onu_details_by_custom_id/${encodeURIComponent(searchId)}`;
+            const res1 = await axios.get(url1, { headers: { 'X-Token': SMARTOLT_API_KEY }, timeout: 4000 });
+            if (res1.data && res1.data.status === true && res1.data.onu_details) {
+                foundOnu = res1.data.onu_details;
+                break;
             }
-        } catch (err) {
-            if (err.response && err.response.status === 429) {
-                console.error('SmartOLT Rate Limit Hit (429)');
-                return res.json({ 
-                    success: false, 
-                    message: 'SmartOLT Server ခေတ္တ မအားပါ (Rate Limit - 429)။ မိနစ်နည်းနည်းစောင့်ပြီး ပြန်စမ်းပါ။' 
-                });
+        } catch (e) {}
+
+        // နည်းလမ်း (၂) - External ID / Name ဖြင့် ရှာမည်
+        try {
+            const url2 = `${domainUrl}/api/onu/get_onu_details_by_external_id/${encodeURIComponent(searchId)}`;
+            const res2 = await axios.get(url2, { headers: { 'X-Token': SMARTOLT_API_KEY }, timeout: 4000 });
+            if (res2.data && res2.data.status === true && res2.data.onu_details) {
+                foundOnu = res2.data.onu_details;
+                break;
             }
-            continue;
-        }
+        } catch (e) {}
     }
 
     if (foundOnu) {
         return res.json({
             success: true,
-            username: foundOnu.name || foundOnu.custom_id,
+            username: foundOnu.name || foundOnu.custom_id || foundOnu.sn || rawId,
             fatBox: foundOnu.zone_name || foundOnu.odb_name || foundOnu.address || 'Unknown-FAT'
         });
     }
@@ -113,7 +115,7 @@ app.post('/api/submit-report', async (req, res) => {
                           `👤 *Customer Name:* ${customerName}\n` +
                           `🆔 *Customer ID:* ${customerId.toUpperCase()}\n` +
                           `📦 *FAT/Zone:* ${currentFatBox}\n` +
-                          `⚠️ *Issue:* ${issue}\n` +
+                          `⚠️️ *Issue:* ${issue}\n` +
                           `⏰ *Time:* ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Yangon' })}`;
 
     try {
@@ -135,7 +137,7 @@ app.post('/api/submit-report', async (req, res) => {
             fatRedLightReports[currentFatBox].push(now);
 
             if (fatRedLightReports[currentFatBox].length >= 3) {
-                const warningMessage = `⚠️ *FAT BOX WARNING ALERT!* ⚠️\n\n` +
+                const warningMessage = `⚠️ *FAT BOX WARNING ALERT!* ⚠️️\n\n` +
                                        `📍 *FAT/Zone Name:* ${currentFatBox}\n` +
                                        `⚡ *Status:* ၁ နာရီအတွင်း မီးနီ Report (${fatRedLightReports[currentFatBox].length}) ခု ဝင်ရောက်ထားပါသည်။\n` +
                                        `❗ Main Fiber Line သို့မဟုတ် FAT Box အပိုင်း အဓိက ပြဿနာရှိနိုင်ပါသဖြင့် အမြန်ဆုံး စစ်ဆေးပေးပါရန်။`;
