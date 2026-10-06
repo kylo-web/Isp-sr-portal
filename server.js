@@ -11,7 +11,7 @@ const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
 const TELEGRAM_CHAT_ID = '-1004295109530';
 
 // 🌐 SmartOLT API Config
-const SMARTOLT_DOMAIN = 'YOUR_SMARTOLT_DOMAIN'; // ဥပမာ: 'https://infinet-mm.smartolt.com/auth/login
+const SMARTOLT_DOMAIN = 'YOUR_SMARTOLT_DOMAIN'; // ဥပမာ: 'infinet-mm.smartolt.com';
 const SMARTOLT_API_KEY = 'accea08359014b738df318ae274218e3';
 
 const customerLastReportTime = {};
