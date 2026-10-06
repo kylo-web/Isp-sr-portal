@@ -18,16 +18,16 @@ const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// 🧠 SmartOLT Cache Memory (၁၀ မိနစ်တစ်ကြိမ် Sync လုပ်မည်)
+// 🧠 SmartOLT Cache Memory (၁၀ မိနစ်တစ်ကြိမ် Auto Sync လုပ်မည်)
 let onuCache = [];
 let lastCacheTime = 0;
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const CACHE_DURATION = 10 * 60 * 1000;
 
 async function refreshOnuCache() {
     if (!SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) return;
     const now = Date.now();
     if (onuCache.length > 0 && (now - lastCacheTime < CACHE_DURATION)) {
-        return; // Cache သက်တမ်း မကုန်သေးပါက ထပ်မဆွဲပါ
+        return;
     }
 
     const domainUrl = SMARTOLT_DOMAIN.includes('.') 
@@ -35,7 +35,7 @@ async function refreshOnuCache() {
         : `https://${SMARTOLT_DOMAIN}.smartolt.com`;
 
     try {
-        console.log('🔄 Fetching ONUs list from SmartOLT...');
+        console.log('🔄 Fetching ONUs from SmartOLT...');
         const response = await axios.get(`${domainUrl}/api/onu/get_all_onus_details`, {
             headers: { 'X-Token': SMARTOLT_API_KEY },
             timeout: 15000
@@ -51,7 +51,7 @@ async function refreshOnuCache() {
     }
 }
 
-// 🔍 Fast Local Cache Search Endpoint (၁၀၀% သေချာသော နည်းလမ်း)
+// 🔍 SmartOLT Lookup Endpoint
 app.get('/api/get-customer/:id', async (req, res) => {
     const searchKey = req.params.id.trim().toUpperCase();
 
@@ -62,24 +62,20 @@ app.get('/api/get-customer/:id', async (req, res) => {
         });
     }
 
-    // Cache Refresh စစ်မည်
     await refreshOnuCache();
 
     if (onuCache.length === 0) {
         return res.json({ 
             success: false, 
-            message: 'SmartOLT Data ချိတ်ဆက်၍ မရသေးပါ (ခဏစောင့်ပြီး ပြန်စမ်းပါ)' 
+            message: 'SmartOLT Data မရရှိသေးပါ (ခဏစောင့်ပြီး ပြန်စမ်းပါ)' 
         });
     }
 
-    // စာလုံးအထဲပါမပါ တိုက်ရိုက် Flex Search လုပ်မည် (ID / Custom ID / Name / Serial Number / External ID)
     const matchedOnu = onuCache.find(onu => {
         const customId = (onu.custom_id || '').toUpperCase();
         const name = (onu.name || '').toUpperCase();
         const sn = (onu.sn || '').toUpperCase();
         const extId = (onu.unique_external_id || '').toUpperCase();
-
-        // ဥပမာ TTY01072 ဆိုရင် 01072 သို့ 1072 ပါရင်ပါ သေချာအောင် နံပါတ်ချည်းသီးသန့်ပါ စစ်ပေးသည်
         const numOnly = searchKey.replace(/\D/g, '');
 
         return customId === searchKey || 
@@ -91,10 +87,19 @@ app.get('/api/get-customer/:id', async (req, res) => {
     });
 
     if (matchedOnu) {
+        // SmartOLT ထဲမှ အတိအကျ ODB/FAT Box Name ကို ဦးစားပေးယူသည်
+        const exactFatBox = matchedOnu.odb_name || matchedOnu.address || matchedOnu.zone_name || matchedOnu.olt_name || 'Unknown-FAT';
+        
+        // SmartOLT Status & Signal
+        const status = matchedOnu.status || 'Unknown';
+        const signal = matchedOnu.snmp_signal || matchedOnu.signal || 'N/A';
+
         return res.json({
             success: true,
             username: matchedOnu.name || matchedOnu.custom_id || matchedOnu.sn,
-            fatBox: matchedOnu.zone_name || matchedOnu.odb_name || matchedOnu.address || 'Unknown-FAT'
+            fatBox: exactFatBox,
+            onuStatus: status,
+            signal: signal
         });
     }
 
@@ -104,14 +109,16 @@ app.get('/api/get-customer/:id', async (req, res) => {
     });
 });
 
-// Report Submit Endpoint
+// 📩 Report Submit Endpoint
 app.post('/api/submit-report', async (req, res) => {
-    const { customerId, customerName, issue, fatBox } = req.body;
+    const { customerId, customerName, issue, fatBox, onuStatus, signal } = req.body;
     const formattedId = customerId.trim().toLowerCase();
     const now = Date.now();
     const todayDate = new Date().toDateString();
 
     const currentFatBox = fatBox || 'Unknown-FAT';
+    const currentStatus = onuStatus || 'N/A';
+    const currentSignal = (signal && signal !== 'N/A') ? `${signal} dBm` : 'N/A';
 
     if (customerLastReportTime[formattedId] === todayDate) {
         return res.json({ 
@@ -123,7 +130,9 @@ app.post('/api/submit-report', async (req, res) => {
     const reportMessage = `🚨 *ISP Report အသစ်ရောက်ရှိပါသည်* 🚨\n\n` +
                           `👤 *Customer Name:* ${customerName}\n` +
                           `🆔 *Customer ID:* ${customerId.toUpperCase()}\n` +
-                          `📦 *FAT/Zone:* ${currentFatBox}\n` +
+                          `📦 *FAT Box:* ${currentFatBox}\n` +
+                          `📡 *SmartOLT Status:* ${currentStatus}\n` +
+                          `📶 *Signal Power:* ${currentSignal}\n` +
                           `⚠️ *Issue:* ${issue}\n` +
                           `⏰ *Time:* ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Yangon' })}`;
 
@@ -147,7 +156,7 @@ app.post('/api/submit-report', async (req, res) => {
 
             if (fatRedLightReports[currentFatBox].length >= 3) {
                 const warningMessage = `⚠️ *FAT BOX WARNING ALERT!* ⚠️\n\n` +
-                                       `📍 *FAT/Zone Name:* ${currentFatBox}\n` +
+                                       `📍 *FAT Box:* ${currentFatBox}\n` +
                                        `⚡ *Status:* ၁ နာရီအတွင်း မီးနီ Report (${fatRedLightReports[currentFatBox].length}) ခု ဝင်ရောက်ထားပါသည်။\n` +
                                        `❗ Main Fiber Line သို့မဟုတ် FAT Box အပိုင်း အဓိက ပြဿနာရှိနိုင်ပါသဖြင့် အမြန်ဆုံး စစ်ဆေးပေးပါရန်။`;
 

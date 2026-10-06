@@ -111,7 +111,7 @@
 
   <div class="form-group">
     <label for="customerId">Customer ID (User ID) *</label>
-    <input type="text" id="customerId" placeholder="e.g. Tty00123" oninput="checkCustomer()">
+    <input type="text" id="customerId" placeholder="e.g. TTY01072" oninput="checkCustomer()">
     <div id="statusMsg" class="status-msg"></div>
   </div>
 
@@ -122,13 +122,12 @@
     <button class="option-btn" onclick="selectIssue(this, 'PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ')">🟡 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ</button>
     <button class="option-btn" onclick="selectIssue(this, 'Power တစ်ခုပဲလင်း')">⚡ Power တစ်ခုပဲလင်း</button>
     <button class="option-btn" onclick="selectIssue(this, 'No Power (မီးလုံးဝမလာပါ)')">🔌 No Power (မီးလုံးဝမလာပါ)</button>
-    <button class="option-btn" onclick="selectIssue(this, 'Password change')">🔑 Password change (စကားဝှက်ပြောင်းရန်)</button>
+    <button class="option-btn" onclick="selectIssue(this, 'Password change (စကားဝှက်ပြောင်းရန်)')">🔑 Password change (စကားဝှက်ပြောင်းရန်)</button>
   </div>
 
   <button class="submit-btn" id="submitBtn" onclick="submitReport()" disabled>ပြဿနာအား တင်ပြမည်</button>
 </div>
 
-<!--  JavaScript Code များကို အောက်ဆုံးတွင် ထည့်သွင်းထားပါသည် -->
 <script>
   let selectedIssue = '';
   let customerData = null;
@@ -147,7 +146,6 @@
       return;
     }
 
-    // စာရိုက်ပြီး ၁ စက္ကန့်အကြာမှ API ခေါ်ရန် ခေတ္တစောင့်ပေးခြင်း
     typingTimer = setTimeout(async () => {
       statusMsg.style.display = 'block';
       statusMsg.className = 'status-msg';
@@ -203,6 +201,8 @@
           customerId: customerId,
           customerName: customerData.username,
           fatBox: customerData.fatBox,
+          onuStatus: customerData.onuStatus,
+          signal: customerData.signal,
           issue: selectedIssue
         })
       });
