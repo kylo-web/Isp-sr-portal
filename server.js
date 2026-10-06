@@ -6,42 +6,81 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-// 🔑 ဒီနေရာတွင် မိမိ၏ Telegram Bot Token နှင့် Chat ID အမှန်ကို ထည့်ပါ
+// 🔑 Telegram Config
 const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
 const TELEGRAM_CHAT_ID = '-1004295109530';
 
-// Customer Database
-const mockDatabase = {
-    'tty01072': { name: 'Min thiha', fatBox: 'FAT-01' },
-    'tty00001': { name: 'Kyaw Gyi', fatBox: 'FAT-01' },
-    'tty00002': { name: 'Aung Aung', fatBox: 'FAT-01' },
-    'tty00003': { name: 'Mya Mya', fatBox: 'FAT-02' }
-};
+// 🌐 SmartOLT API Config
+const SMARTOLT_DOMAIN = 'YOUR_SMARTOLT_DOMAIN'; // ဥပမာ: 'https://infinet-mm.smartolt.com/auth/login
+const SMARTOLT_API_KEY = 'accea08359014b738df318ae274218e3';
 
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// 1. Customer ID Lookup API
-app.get('/api/get-customer/:id', (req, res) => {
-    const customerId = req.params.id.trim().toLowerCase();
-    const customerData = mockDatabase[customerId];
+// Helper Function: ID ကို Format အမျိုးမျိုး ပြောင်းပေးခြင်း (tty797 -> tty00797, tty0797, tty797)
+function generatePossibleIDs(rawId) {
+    const cleaned = rawId.trim().toLowerCase();
+    const match = cleaned.match(/^([a-z]+)?(\d+)$/);
 
-    if (customerData) {
-        res.json({ success: true, username: customerData.name });
-    } else {
-        res.json({ success: false, message: 'Customer ID မရှိပါ' });
+    if (!match) return [cleaned];
+
+    const prefix = match[1] || 'tty'; // prefix မပါရင် 'tty' လို့ ယူမည်
+    const numStr = match[2];
+    const num = parseInt(numStr, 10);
+
+    const ids = new Set();
+    ids.add(cleaned);
+    ids.add(`${prefix}${num}`);
+    ids.add(`${prefix}${String(num).padStart(3, '0')}`);
+    ids.add(`${prefix}${String(num).padStart(4, '0')}`);
+    ids.add(`${prefix}${String(num).padStart(5, '0')}`);
+
+    return Array.from(ids);
+}
+
+// 1. SmartOLT API မှတစ်ဆင့် Customer Lookup လုပ်ခြင်း (Format အစုံဖြင့် ရှာမည်)
+app.get('/api/get-customer/:id', async (req, res) => {
+    const rawId = req.params.id.trim();
+    const possibleIds = generatePossibleIDs(rawId);
+
+    try {
+        let foundOnu = null;
+
+        for (const searchId of possibleIds) {
+            const response = await axios.get(`https://${SMARTOLT_DOMAIN}/api/onu/get_all_onus_details`, {
+                headers: { 'X-Token': SMARTOLT_API_KEY },
+                params: { custom_id: searchId }
+            });
+
+            if (response.data && response.data.onus && response.data.onus.length > 0) {
+                foundOnu = response.data.onus[0];
+                break; // တွေ့ရင် Loop ရပ်မည်
+            }
+        }
+
+        if (foundOnu) {
+            res.json({
+                success: true,
+                username: foundOnu.name || foundOnu.custom_id,
+                fatBox: foundOnu.zone_name || foundOnu.odb_name || 'Unknown-FAT'
+            });
+        } else {
+            res.json({ success: false, message: 'SmartOLT ထဲတွင် Customer ID မတွေ့ရှိပါ' });
+        }
+    } catch (error) {
+        console.error('SmartOLT API Error:', error.response ? error.response.data : error.message);
+        res.json({ success: false, message: 'SmartOLT ချိတ်ဆက်မှု အဆင်မပြေပါ' });
     }
 });
 
 // 2. Report Submit API
 app.post('/api/submit-report', async (req, res) => {
-    const { customerId, customerName, issue } = req.body;
+    const { customerId, customerName, issue, fatBox } = req.body;
     const formattedId = customerId.trim().toLowerCase();
     const now = Date.now();
     const todayDate = new Date().toDateString();
 
-    const customerData = mockDatabase[formattedId];
-    const fatBox = customerData ? customerData.fatBox : 'Unknown-FAT';
+    const currentFatBox = fatBox || 'Unknown-FAT';
 
     if (customerLastReportTime[formattedId] === todayDate) {
         return res.json({ 
@@ -53,7 +92,7 @@ app.post('/api/submit-report', async (req, res) => {
     const reportMessage = `🚨 *ISP Report အသစ်ရောက်ရှိပါသည်* 🚨\n\n` +
                           `👤 *Customer Name:* ${customerName}\n` +
                           `🆔 *Customer ID:* ${customerId.toUpperCase()}\n` +
-                          `📦 *FAT Box:* ${fatBox}\n` +
+                          `📦 *FAT/Zone:* ${currentFatBox}\n` +
                           `⚠️ *Issue:* ${issue}\n` +
                           `⏰ *Time:* ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Yangon' })}`;
 
@@ -67,18 +106,18 @@ app.post('/api/submit-report', async (req, res) => {
         customerLastReportTime[formattedId] = todayDate;
 
         if (issue.includes('မီးနီ')) {
-            if (!fatRedLightReports[fatBox]) {
-                fatRedLightReports[fatBox] = [];
+            if (!fatRedLightReports[currentFatBox]) {
+                fatRedLightReports[currentFatBox] = [];
             }
 
             const oneHourAgo = now - 60 * 60 * 1000;
-            fatRedLightReports[fatBox] = fatRedLightReports[fatBox].filter(timestamp => timestamp > oneHourAgo);
-            fatRedLightReports[fatBox].push(now);
+            fatRedLightReports[currentFatBox] = fatRedLightReports[currentFatBox].filter(timestamp => timestamp > oneHourAgo);
+            fatRedLightReports[currentFatBox].push(now);
 
-            if (fatRedLightReports[fatBox].length >= 3) {
+            if (fatRedLightReports[currentFatBox].length >= 3) {
                 const warningMessage = `⚠️ *FAT BOX WARNING ALERT!* ⚠️\n\n` +
-                                       `📍 *FAT Box ID:* ${fatBox}\n` +
-                                       `⚡ *Status:* ၁ နာရီအတွင်း မီးနီ Report (${fatRedLightReports[fatBox].length}) ခု ဝင်ရောက်ထားပါသည်။\n` +
+                                       `📍 *FAT/Zone Name:* ${currentFatBox}\n` +
+                                       `⚡ *Status:* ၁ နာရီအတွင်း မီးနီ Report (${fatRedLightReports[currentFatBox].length}) ခု ဝင်ရောက်ထားပါသည်။\n` +
                                        `❗ Main Fiber Line သို့မဟုတ် FAT Box အပိုင်း အဓိက ပြဿနာရှိနိုင်ပါသဖြင့် အမြန်ဆုံး စစ်ဆေးပေးပါရန်။`;
 
                 await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -98,11 +137,4 @@ app.post('/api/submit-report', async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
-    
-    // Server မအိပ်သွားစေရန် ၁၄ မိနစ်တစ်ကြိမ် Self-Ping
-    setInterval(() => {
-        axios.get(`https://isp-sr-portal-11.onrender.com/`)
-            .then(() => console.log('Self-ping successful'))
-            .catch(err => console.error('Self-ping failed:', err.message));
-    }, 14 * 60 * 1000);
 });
