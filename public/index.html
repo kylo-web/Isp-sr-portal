@@ -1,165 +1,223 @@
 <!DOCTYPE html>
 <html lang="my">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet ပြဿနာ တင်ပြရန်</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; padding: 20px; margin: 0; }
-        .container { max-width: 420px; background: #1e1e1e; padding: 25px; border-radius: 16px; margin: 20px auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        h2 { text-align: center; color: #ffffff; margin-bottom: 25px; font-size: 22px; font-weight: 700; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 10px; font-weight: 600; font-size: 14px; color: #a0aec0; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 14px; box-sizing: border-box; border: 1.5px solid #333333; border-radius: 10px; background-color: #2a2a2a; color: #ffffff; font-size: 15px; outline: none; }
-        input[type="text"]:focus, input[type="password"]:focus { border-color: #38a169; }
-        
-        .issue-grid { display: flex; flex-direction: column; gap: 10px; }
-        .issue-row { display: flex; gap: 10px; }
-        .issue-btn { flex: 1; padding: 14px; background-color: #2a2a2a; border: 1.5px solid #333333; border-radius: 10px; font-size: 14px; font-weight: 600; color: #ffffff; cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
-        .issue-btn.active { border-color: #38a169; background-color: #1a382b; color: #38a169; box-shadow: 0 0 0 1px #38a169; }
-
-        .submit-btn { width: 100%; padding: 16px; background-color: #27a745; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; }
-        .submit-btn:hover { background-color: #218838; }
-        #customerNameDisplay { margin-top: 8px; display: block; font-size: 14px; font-weight: 600; }
-        
-        #passwordGroup { display: none; margin-top: 15px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Internet ပြဿနာ တင်ပြရန်</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .container {
+      background-color: #1e1e1e;
+      padding: 24px;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 20px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #ccc;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background-color: #2a2a2a;
+      color: #fff;
+      font-size: 16px;
+      box-sizing: border-box;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: #28a745;
+    }
+    .status-msg {
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+      word-break: break-word;
+    }
+    .error { color: #ff4d4d; }
+    .success { color: #28a745; }
+    .issue-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .option-btn {
+      background-color: #2a2a2a;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 12px;
+      color: #fff;
+      text-align: left;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: 0.2s;
+    }
+    .option-btn:hover { background-color: #333; }
+    .option-btn.active {
+      border-color: #28a745;
+      background-color: #1b3820;
+    }
+    .submit-btn {
+      width: 100%;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .submit-btn:disabled {
+      background-color: #444;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Internet ပြဿနာ တင်ပြရန်</h2>
-        <form id="reportForm">
-            <div class="form-group">
-                <label>Customer ID (User ID) *</label>
-                <input type="text" id="customerId" placeholder="ဥပမာ - TTY01234" required autocomplete="off">
-                <small id="customerNameDisplay"></small>
-            </div>
 
-            <div class="form-group">
-                <label>ကြုံတွေ့နေရသော ပြဿနာ ရွေးချယ်ပါ *</label>
-                <div class="issue-grid">
-                    <div class="issue-row">
-                        <div class="issue-btn" onclick="selectIssue(this, '🔴 မီးနီ')">🔴 မီးနီ</div>
-                        <div class="issue-btn" onclick="selectIssue(this, '🐢 လိုင်းနှေး')">🐢 လိုင်းနှေး</div>
-                    </div>
-                    <div class="issue-btn" onclick="selectIssue(this, '🟡 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ')">🟡 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ</div>
-                    <div class="issue-btn" onclick="selectIssue(this, '⚡ Power တစ်ခုပဲလင်း')">⚡ Power တစ်ခုပဲလင်း</div>
-                    <div class="issue-btn" onclick="selectIssue(this, '🔌 No Power (မီးလုံးဝမလာပါ)')">🔌 No Power (မီးလုံးဝမလာပါ)</div>
-                    <div class="issue-btn" onclick="selectIssue(this, '🔑 Password change (စကားဝှက်ပြောင်းရန်)')">🔑 Password change (စကားဝှက်ပြောင်းရန်)</div>
-                </div>
-            </div>
+<div class="container">
+  <h2>Internet ပြဿနာ တင်ပြရန်</h2>
 
-            <!-- Password အသစ်တောင်းမည့် Input Box -->
-            <div class="form-group" id="passwordGroup">
-                <label>စကားဝှက်အသစ် (New Password) *</label>
-                <input type="text" id="newPassword" placeholder="ပြောင်းလဲလိုသော စကားဝှက်အသစ် ရိုက်ထည့်ပါ">
-            </div>
+  <div class="form-group">
+    <label for="customerId">Customer ID (User ID) *</label>
+    <input type="text" id="customerId" placeholder="e.g. Tty00123" oninput="checkCustomer()">
+    <div id="statusMsg" class="status-msg"></div>
+  </div>
 
-            <button type="submit" class="submit-btn">ပြဿနာအား တင်ပြမည်</button>
-        </form>
-    </div>
+  <label>ကြုံတွေ့နေရသော ပြဿနာ ရွေးချယ်ပါ *</label>
+  <div class="issue-options">
+    <button class="option-btn" onclick="selectIssue(this, 'မီးနီ')">🔴 မီးနီ</button>
+    <button class="option-btn" onclick="selectIssue(this, 'လိုင်းနှေး')">🐢 လိုင်းနှေး</button>
+    <button class="option-btn" onclick="selectIssue(this, 'PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ')">🟡 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ</button>
+    <button class="option-btn" onclick="selectIssue(this, 'Power တစ်ခုပဲလင်း')">⚡ Power တစ်ခုပဲလင်း</button>
+    <button class="option-btn" onclick="selectIssue(this, 'No Power (မီးလုံးဝမလာပါ)')">🔌 No Power (မီးလုံးဝမလာပါ)</button>
+    <button class="option-btn" onclick="selectIssue(this, 'Password change')">🔑 Password change (စကားဝှက်ပြောင်းရန်)</button>
+  </div>
 
-    <script>
-    let fetchedName = '';
-    let selectedIssueText = '';
+  <button class="submit-btn" id="submitBtn" onclick="submitReport()" disabled>ပြဿနာအား တင်ပြမည်</button>
+</div>
 
-    function selectIssue(element, value) {
-        document.querySelectorAll('.issue-btn').forEach(btn => btn.classList.remove('active'));
-        element.classList.add('active');
-        selectedIssueText = value;
+<!--  JavaScript Code များကို အောက်ဆုံးတွင် ထည့်သွင်းထားပါသည် -->
+<script>
+  let selectedIssue = '';
+  let customerData = null;
+  let typingTimer;
 
-        const passGroup = document.getElementById('passwordGroup');
-        const passInput = document.getElementById('newPassword');
+  function checkCustomer() {
+    clearTimeout(typingTimer);
+    const idInput = document.getElementById('customerId').value.trim();
+    const statusMsg = document.getElementById('statusMsg');
+    const submitBtn = document.getElementById('submitBtn');
 
-        if (value.includes('Password change')) {
-            passGroup.style.display = 'block';
-            passInput.required = true;
-        } else {
-            passGroup.style.display = 'none';
-            passInput.required = false;
-            passInput.value = '';
-        }
+    if (!idInput) {
+      statusMsg.style.display = 'none';
+      submitBtn.disabled = true;
+      customerData = null;
+      return;
     }
 
-    document.getElementById('customerId').addEventListener('input', async function() {
-        const customerId = this.value.trim();
-        const nameDisplay = document.getElementById('customerNameDisplay');
-        
-        if (!customerId) {
-            nameDisplay.innerText = '';
-            fetchedName = '';
-            return;
+    // စာရိုက်ပြီး ၁ စက္ကန့်အကြာမှ API ခေါ်ရန် ခေတ္တစောင့်ပေးခြင်း
+    typingTimer = setTimeout(async () => {
+      statusMsg.style.display = 'block';
+      statusMsg.className = 'status-msg';
+      statusMsg.innerText = '⏳ SmartOLT ထဲတွင် ရှာဖွေနေပါသည်...';
+
+      try {
+        const response = await fetch(`/api/get-customer/${encodeURIComponent(idInput)}`);
+        const data = await response.json();
+
+        if (data.success) {
+          customerData = data;
+          statusMsg.className = 'status-msg success';
+          statusMsg.innerText = `✅ Customer: ${data.username} (${data.fatBox})`;
+          if (selectedIssue) submitBtn.disabled = false;
+        } else {
+          customerData = null;
+          submitBtn.disabled = true;
+          statusMsg.className = 'status-msg error';
+          statusMsg.innerText = `❌ ${data.message}`;
         }
+      } catch (err) {
+        customerData = null;
+        submitBtn.disabled = true;
+        statusMsg.className = 'status-msg error';
+        statusMsg.innerText = '❌ Server သို့ ချိတ်ဆက်၍ မရပါ';
+      }
+    }, 600);
+  }
 
-        try {
-            const response = await fetch(`/api/get-customer/${customerId}`);
-            const data = await response.json();
+  function selectIssue(element, issueName) {
+    document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('active'));
+    element.classList.add('active');
+    selectedIssue = issueName;
 
-            if (data.success) {
-                fetchedName = data.username;
-                nameDisplay.style.color = '#38a169';
-                nameDisplay.innerText = `👤 Name: ${data.username}`;
-            } else {
-                fetchedName = '';
-                nameDisplay.style.color = '#e53e3e';
-                nameDisplay.innerText = `❌ ${data.message}`;
-            }
-        } catch (error) {
-            console.error('Error:', error);
-        }
-    });
+    if (customerData) {
+      document.getElementById('submitBtn').disabled = false;
+    }
+  }
 
-    document.getElementById('reportForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const customerId = document.getElementById('customerId').value.trim();
-        const newPassword = document.getElementById('newPassword').value.trim();
+  async function submitReport() {
+    const customerId = document.getElementById('customerId').value.trim();
+    if (!customerData || !selectedIssue) return;
 
-        if (!fetchedName) {
-            alert('ကျေးဇူးပြု၍ မှန်ကန်သော Customer ID ထည့်ပေးပါ');
-            return;
-        }
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'ခဏစောင့်ပါ...';
 
-        if (!selectedIssueText) {
-            alert('ကျေးဇူးပြု၍ ပြဿနာတစ်ခုခုကို ရွေးချယ်ပေးပါ');
-            return;
-        }
+    try {
+      const response = await fetch('/api/submit-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customerId,
+          customerName: customerData.username,
+          fatBox: customerData.fatBox,
+          issue: selectedIssue
+        })
+      });
 
-        let finalIssueText = selectedIssueText;
-        if (selectedIssueText.includes('Password change')) {
-            if (!newPassword) {
-                alert('ကျေးဇူးပြု၍ စကားဝှက်အသစ် ထည့်သွင်းပေးပါ');
-                return;
-            }
-            finalIssueText = `${selectedIssueText}\n🔑 *New Password:* \`${newPassword}\``;
-        }
+      const resData = await response.json();
+      alert(resData.message);
+      if (resData.success) location.reload();
+    } catch (e) {
+      alert('Report ပို့ရာတွင် အမှားဖြစ်ပွားခဲ့ပါသည်');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerText = 'ပြဿနာအား တင်ပြမည်';
+    }
+  }
+</script>
 
-        try {
-            const response = await fetch('/api/submit-report', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    customerId: customerId,
-                    customerName: fetchedName,
-                    issue: finalIssueText
-                })
-            });
-
-            const result = await response.json();
-            if (result.success) {
-                alert('Report အောင်မြင်စွာ တင်ပြပြီးပါပြီ။');
-                document.getElementById('reportForm').reset();
-                document.getElementById('customerNameDisplay').innerText = '';
-                document.querySelectorAll('.issue-btn').forEach(btn => btn.classList.remove('active'));
-                document.getElementById('passwordGroup').style.display = 'none';
-                fetchedName = '';
-                selectedIssueText = '';
-            } else {
-                alert(result.message);
-            }
-        } catch (err) {
-            alert('Network Error ဖြစ်ပွားနေပါသည်။');
-        }
-    });
-    </script>
 </body>
 </html>
