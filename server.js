@@ -6,19 +6,20 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-// 🔑 Telegram Config
-const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
-const TELEGRAM_CHAT_ID = '-1004295109530';
+// 🔑 Telegram & SmartOLT Environment Configs
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
-// 🌐 SmartOLT API Config
-// DOMAIN တွင် 'https://' မပါရပါ (ဥပမာ: 'mycompany.smartolt.com' သို့မဟုတ် 'mycompany')
-const SMARTOLT_DOMAIN = 'infinet-mm.smartolt.com'.replace(/^https?:\/\//, '').replace(/\/$/, '');
-const SMARTOLT_API_KEY = 'accea08359014b738df318ae274218e3';
+let domainInput = process.env.SMARTOLT_DOMAIN || '';
+domainInput = domainInput.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+const SMARTOLT_DOMAIN = domainInput;
+const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// ID Format အစုံ ထုတ်ပေးသည့် Function (tty797 -> TTY00797, TTY0797, TTY797)
+// Customer ID ပုံစံအမျိုးမျိုး ထုတ်ပေးရန် (tty00001, TTY00001, tty1, 1)
 function generatePossibleIDs(rawId) {
     const cleaned = rawId.trim();
     const match = cleaned.match(/^([a-zA-Z]+)?(\d+)$/);
@@ -26,7 +27,8 @@ function generatePossibleIDs(rawId) {
     if (!match) return [cleaned.toUpperCase()];
 
     const prefix = (match[1] || 'TTY').toUpperCase();
-    const num = parseInt(match[2], 10);
+    const numStr = match[2];
+    const num = parseInt(numStr, 10);
 
     const ids = new Set();
     ids.add(cleaned.toUpperCase());
@@ -34,14 +36,20 @@ function generatePossibleIDs(rawId) {
     ids.add(`${prefix}${String(num).padStart(3, '0')}`);
     ids.add(`${prefix}${String(num).padStart(4, '0')}`);
     ids.add(`${prefix}${String(num).padStart(5, '0')}`);
+    ids.add(String(num));
 
     return Array.from(ids);
 }
 
-// SmartOLT API မှ Customer ရှာဖွေခြင်း (Direct Custom ID Endpoint)
+// 🔍 SmartOLT API Customer Lookup
 app.get('/api/get-customer/:id', async (req, res) => {
     const rawId = req.params.id.trim();
     const possibleIds = generatePossibleIDs(rawId);
+
+    if (!SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) {
+        console.error('SmartOLT Config Missing!');
+        return res.json({ success: false, message: 'SmartOLT API အချက်အလက် မပြည့်စုံပါ' });
+    }
 
     const domainUrl = SMARTOLT_DOMAIN.includes('.') 
         ? `https://${SMARTOLT_DOMAIN}`
@@ -50,46 +58,47 @@ app.get('/api/get-customer/:id', async (req, res) => {
     try {
         let foundOnu = null;
 
-        // ID Format တစ်ခုချင်းစီဖြင့် SmartOLT သို့ တိုက်ရိုက် တောင်းကြည့်မည်
-        for (const searchId of possibleIds) {
-            try {
-                // SmartOLT Custom ID Direct Search Endpoint
-                const apiUrl = `${domainUrl}/api/onu/get_onu_details_by_custom_id/${encodeURIComponent(searchId)}`;
-                
-                const response = await axios.get(apiUrl, {
-                    headers: { 
-                        'X-Token': SMARTOLT_API_KEY,
-                        'Accept': 'application/json'
-                    },
-                    timeout: 5000
-                });
+        // နည်းလမ်း (၁) - ONUs အားလုံးကို ဆွဲယူပြီး တိကျစွာ တိုက်ဆိုင်စစ်ဆေးခြင်း
+        try {
+            const listUrl = `${domainUrl}/api/onu/get_all_onus_details`;
+            const response = await axios.get(listUrl, {
+                headers: { 
+                    'X-Token': SMARTOLT_API_KEY,
+                    'Accept': 'application/json'
+                },
+                timeout: 10000
+            });
 
-                if (response.data && response.data.status === true && response.data.onu_details) {
-                    foundOnu = response.data.onu_details;
-                    break; // တွေ့ရှိပါက Loop မှ ထွက်မည်
-                }
-            } catch (err) {
-                // Single ID search 404/Error ဖြစ်ပါက နောက်တစ်မျိုး ဆက်ရှာမည်
-                continue;
+            if (response.data && response.data.onus && Array.isArray(response.data.onus)) {
+                const allOnus = response.data.onus;
+                foundOnu = allOnus.find(onu => {
+                    const cId = (onu.custom_id || '').toUpperCase();
+                    const name = (onu.name || '').toUpperCase();
+                    const sn = (onu.sn || '').toUpperCase();
+                    return possibleIds.some(pId => cId === pId || name.includes(pId) || sn === pId);
+                });
             }
+        } catch (e) {
+            console.log('Method 1 search failed, trying method 2:', e.message);
         }
 
-        // Direct Search နဲ့ မတွေ့ပါက Search API သို့ မေးကြည့်မည်
+        // နည်းလမ်း (၂) - Direct Custom ID Endpoint ဖြင့် ရှာဖွေခြင်း
         if (!foundOnu) {
-            try {
-                const searchUrl = `${domainUrl}/api/onu/get_all_onus_details`;
-                const response = await axios.get(searchUrl, {
-                    headers: { 'X-Token': SMARTOLT_API_KEY },
-                    params: { custom_id: possibleIds[0] },
-                    timeout: 7000
-                });
+            for (const searchId of possibleIds) {
+                try {
+                    const directUrl = `${domainUrl}/api/onu/get_onu_details_by_custom_id/${encodeURIComponent(searchId)}`;
+                    const response = await axios.get(directUrl, {
+                        headers: { 'X-Token': SMARTOLT_API_KEY },
+                        timeout: 5000
+                    });
 
-                if (response.data && response.data.onus && response.data.onus.length > 0) {
-                    const allOnus = response.data.onus;
-                    foundOnu = allOnus.find(o => possibleIds.some(pId => (o.custom_id || '').toUpperCase() === pId)) || allOnus[0];
+                    if (response.data && response.data.status === true && response.data.onu_details) {
+                        foundOnu = response.data.onu_details;
+                        break;
+                    }
+                } catch (err) {
+                    continue;
                 }
-            } catch (e) {
-                console.error('Fallback search error:', e.message);
             }
         }
 
@@ -109,7 +118,7 @@ app.get('/api/get-customer/:id', async (req, res) => {
     }
 });
 
-// Report Submit API
+// 📩 Report Submit API
 app.post('/api/submit-report', async (req, res) => {
     const { customerId, customerName, issue, fatBox } = req.body;
     const formattedId = customerId.trim().toLowerCase();
@@ -166,7 +175,7 @@ app.post('/api/submit-report', async (req, res) => {
 
         res.json({ success: true, message: 'Report အောင်မြင်စွာ ပို့ပြီးပါပြီ' });
     } catch (error) {
-        console.error('Telegram Error:', error.response ? error.response.data : error.message);
+        console.error('Telegram Error:', error.message);
         res.json({ success: false, message: 'Telegram Noti ပို့ရာတွင် အမှားရှိပါသည်' });
     }
 });
