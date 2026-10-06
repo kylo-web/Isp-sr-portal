@@ -18,7 +18,7 @@
             <label>Customer ID (User ID) *</label>
 
             <!-- Customer ID ထည့်ရန် အကွက် -->
-            <input type="text" id="customerId" placeholder="ဥပမာ - Tty01072" required>
+  <small id="customerNameDisplay" style="color: green; font-weight: bold; margin-top: 5px; display: block;"></small>
 
             <!-- နာမည် ပေါ်လာမည့် နေရာ -->
             <small id="customerNameDisplay" style="color: #4caf50; font-weight: bold; margin-top: 8px; display: block; font-size: 14px;"></small>
@@ -48,7 +48,30 @@
         } catch (error) {
             console.error('Error:', error);
         }
-    });
+    });<script>
+document.getElementById('customerId').addEventListener('input', async function() {
+    const customerId = this.value.trim();
+    const nameDisplay = document.getElementById('customerNameDisplay');
+    
+    if (!customerId) {
+        nameDisplay.innerText = '';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/get-customer/${customerId}`);
+        const data = await response.json();
+
+        if (data.success) {
+            nameDisplay.innerText = `👤 Name: ${data.username}`;
+        } else {
+            nameDisplay.innerText = `❌ ${data.message}`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+});
+</script>
     </script>
 </body>
 </html>
