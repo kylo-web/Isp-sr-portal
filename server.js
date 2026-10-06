@@ -55,29 +55,54 @@ async function refreshOnuCache() {
     }
 }
 
-// 🔍 SmartOLT မှ dBm Signal အား ရယူရန် Function (Multiple Fields Checking)
-async function getExactSignalDbm(onuExternalId, fallbackSignal) {
-    // 1. အကယ်၍ Cache ထဲမှာ ကိန်းဂဏန်း dBm ပါပြီးသားဆိုရင် တိုက်ရိုက်ယူမည်
-    if (fallbackSignal && typeof fallbackSignal === 'string' && (fallbackSignal.includes('-') || fallbackSignal.includes('dBm'))) {
-        return fallbackSignal;
+// 🔍 SmartOLT Object ထဲမှ dBm Value ကို ရှာဖွေဆွဲယူသည့် Function
+function extractSignalValue(onu) {
+    if (!onu) return 'N/A';
+
+    // SmartOLT API တန်ဖိုးများ ဖြစ်နိုင်ခြေရှိသော Field အားလုံးကို စစ်ဆေးခြင်း
+    const possibleFields = [
+        onu.signal_1310,
+        onu.signal_1490,
+        onu.snmp_signal,
+        onu.onu_signal_value,
+        onu.signal,
+        onu.rx_power,
+        onu.onu_rx_power
+    ];
+
+    for (let val of possibleFields) {
+        if (val !== undefined && val !== null && val !== '') {
+            let strVal = val.toString().trim();
+            // ကိန်းဂဏန်း အနုတ်လက္ခဏာ သို့မဟုတ် ဂဏန်းပါဝင်မှု စစ်ဆေးခြင်း (ဥပမာ -21.45, -23.1)
+            if (strVal.match(/-?\d+(\.\d+)?/)) {
+                return strVal;
+            }
+        }
     }
 
+    return 'N/A';
+}
+
+// 🔍 Real-time dBm Signal ခေါ်ယူသည့် Function (Fallback Endpoint)
+async function getExactSignalDbmApi(onuExternalId) {
     if (!onuExternalId || !SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) return 'N/A';
     const domainUrl = getDomainUrl();
 
     try {
-        // SmartOLT Signal API
         const res = await axios.get(`${domainUrl}/api/onu/get_onu_signal/${onuExternalId}`, {
             headers: { 'X-Token': SMARTOLT_API_KEY },
             timeout: 8000
         });
 
         if (res.data) {
-            // SmartOLT API Fields ပုံစံအမျိုးမျိုးကို စစ်ဆေးခြင်း
-            const sig = res.data.signal || res.data.onu_signal || res.data.snmp_signal || (res.data.response ? res.data.response.rx_power : null);
+            const sig = res.data.signal || res.data.onu_signal || res.data.snmp_signal || 
+                        (res.data.response ? (res.data.response.rx_power || res.data.response.signal) : null);
             
             if (sig) {
-                return sig.toString();
+                let strSig = sig.toString().trim();
+                if (strSig.match(/-?\d+(\.\d+)?/)) {
+                    return strSig;
+                }
             }
         }
     } catch (err) {
@@ -126,11 +151,14 @@ app.get('/api/get-customer/:id', async (req, res) => {
         const exactFatBox = matchedOnu.odb_name || matchedOnu.address || matchedOnu.zone_name || matchedOnu.olt_name || 'Unknown-FAT';
         const status = matchedOnu.status || 'Unknown';
         
-        // SmartOLT ၏ ID / Unique External ID
-        const extId = matchedOnu.unique_external_id || matchedOnu.id;
-        
-        // Signal Power တိုက်ရိုက်ဆွဲယူခြင်း
-        const signalValue = await getExactSignalDbm(extId, matchedOnu.snmp_signal || matchedOnu.signal);
+        // ONU Details ထဲမှ Signal တန်ဖိုးအား တိုက်ရိုက်ဆွဲယူခြင်း
+        let signalValue = extractSignalValue(matchedOnu);
+
+        // အကယ်၍ Cache ထဲတွင် မတွေ့ပါက API တိုက်ရိုက်ခေါ်ယူခြင်း
+        if (signalValue === 'N/A') {
+            const extId = matchedOnu.unique_external_id || matchedOnu.id || matchedOnu.sn;
+            signalValue = await getExactSignalDbmApi(extId);
+        }
 
         return res.json({
             success: true,
@@ -157,9 +185,13 @@ app.post('/api/submit-report', async (req, res) => {
     const currentFatBox = fatBox || 'Unknown-FAT';
     const currentStatus = onuStatus || 'N/A';
     
+    // Signal Power Format ပြုပြင်ခြင်း
     let formattedSignal = 'N/A';
     if (signal && signal !== 'N/A') {
-        formattedSignal = signal.includes('dBm') ? signal : `${signal} dBm`;
+        const cleanSig = signal.replace(/dBm/gi, '').trim();
+        if (cleanSig && cleanSig !== '-') {
+            formattedSignal = `${cleanSig} dBm`;
+        }
     }
 
     if (customerLastReportTime[formattedId] === todayDate) {
