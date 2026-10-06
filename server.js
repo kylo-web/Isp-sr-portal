@@ -6,8 +6,9 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-const TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
-const TELEGRAM_CHAT_ID = 'YOUR_TELEGRAM_CHAT_ID_HERE';
+// 🔑 ဒီနေရာတွင် မိမိ၏ Telegram Bot Token နှင့် Chat ID အမှန်ကို ထည့်ပါ
+const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
+const TELEGRAM_CHAT_ID = '-1004295109530';
 
 // Customer Database
 const mockDatabase = {
@@ -98,7 +99,7 @@ app.post('/api/submit-report', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     
-    // Server မအိပ်သွားစေရန် ၁၄ မိနစ်တစ်ကြိမ် Self-Ping လုပ်ပေးခြင်း
+    // Server မအိပ်သွားစေရန် ၁၄ မိနစ်တစ်ကြိမ် Self-Ping
     setInterval(() => {
         axios.get(`https://isp-sr-portal-11.onrender.com/`)
             .then(() => console.log('Self-ping successful'))
