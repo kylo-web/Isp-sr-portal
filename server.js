@@ -18,34 +18,42 @@ const SMARTOLT_API_KEY = process.env.SMARTOLT_API_KEY || '';
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// Helper: ID / ਨੰပါတ် နမူနာများ
-function generatePossibleIDs(rawId) {
-    const cleaned = rawId.trim();
-    const match = cleaned.match(/^([a-zA-Z]+)?(\d+)$/);
+// 🧠 SmartOLT Cache Memory (၁၀ မိနစ်တစ်ကြိမ် Sync လုပ်မည်)
+let onuCache = [];
+let lastCacheTime = 0;
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-    const ids = new Set();
-    ids.add(cleaned);
-    ids.add(cleaned.toUpperCase());
-    ids.add(cleaned.toLowerCase());
-
-    if (match) {
-        const prefix = (match[1] || 'TTY').toUpperCase();
-        const num = parseInt(match[2], 10);
-
-        ids.add(`${prefix}${num}`);
-        ids.add(`${prefix}${String(num).padStart(3, '0')}`);
-        ids.add(`${prefix}${String(num).padStart(4, '0')}`);
-        ids.add(`${prefix}${String(num).padStart(5, '0')}`);
-        ids.add(`${num}`);
+async function refreshOnuCache() {
+    if (!SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) return;
+    const now = Date.now();
+    if (onuCache.length > 0 && (now - lastCacheTime < CACHE_DURATION)) {
+        return; // Cache သက်တမ်း မကုန်သေးပါက ထပ်မဆွဲပါ
     }
 
-    return Array.from(ids);
+    const domainUrl = SMARTOLT_DOMAIN.includes('.') 
+        ? `https://${SMARTOLT_DOMAIN}`
+        : `https://${SMARTOLT_DOMAIN}.smartolt.com`;
+
+    try {
+        console.log('🔄 Fetching ONUs list from SmartOLT...');
+        const response = await axios.get(`${domainUrl}/api/onu/get_all_onus_details`, {
+            headers: { 'X-Token': SMARTOLT_API_KEY },
+            timeout: 15000
+        });
+
+        if (response.data && response.data.onus && Array.isArray(response.data.onus)) {
+            onuCache = response.data.onus;
+            lastCacheTime = now;
+            console.log(`✅ Loaded ${onuCache.length} ONUs into memory cache!`);
+        }
+    } catch (err) {
+        console.error('❌ Cache Fetch Error:', err.message);
+    }
 }
 
-// 🔍 SmartOLT Robust Search Endpoint
+// 🔍 Fast Local Cache Search Endpoint (၁၀၀% သေချာသော နည်းလမ်း)
 app.get('/api/get-customer/:id', async (req, res) => {
-    const rawId = req.params.id.trim();
-    const possibleIds = generatePossibleIDs(rawId);
+    const searchKey = req.params.id.trim().toUpperCase();
 
     if (!SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) {
         return res.json({ 
@@ -54,58 +62,45 @@ app.get('/api/get-customer/:id', async (req, res) => {
         });
     }
 
-    const domainUrl = SMARTOLT_DOMAIN.includes('.') 
-        ? `https://${SMARTOLT_DOMAIN}`
-        : `https://${SMARTOLT_DOMAIN}.smartolt.com`;
+    // Cache Refresh စစ်မည်
+    await refreshOnuCache();
 
-    const headers = { 'X-Token': SMARTOLT_API_KEY };
-    let foundOnu = null;
-
-    for (const searchId of possibleIds) {
-        if (foundOnu) break;
-
-        // 1. Get by Custom ID
-        try {
-            const url1 = `${domainUrl}/api/onu/get_onu_details_by_custom_id/${encodeURIComponent(searchId)}`;
-            const res1 = await axios.get(url1, { headers, timeout: 3500 });
-            if (res1.data && res1.data.status === true && res1.data.onu_details) {
-                foundOnu = res1.data.onu_details;
-                break;
-            }
-        } catch (e) {}
-
-        // 2. Get by External ID / Name direct
-        try {
-            const url2 = `${domainUrl}/api/onu/get_onu_details_by_external_id/${encodeURIComponent(searchId)}`;
-            const res2 = await axios.get(url2, { headers, timeout: 3500 });
-            if (res2.data && res2.data.status === true && res2.data.onu_details) {
-                foundOnu = res2.data.onu_details;
-                break;
-            }
-        } catch (e) {}
-
-        // 3. Search ONUs by Name/ID Keyword
-        try {
-            const url3 = `${domainUrl}/api/onu/get_onus_by_name/${encodeURIComponent(searchId)}`;
-            const res3 = await axios.get(url3, { headers, timeout: 3500 });
-            if (res3.data && res3.data.status === true && Array.isArray(res3.data.onus) && res3.data.onus.length > 0) {
-                foundOnu = res3.data.onus[0];
-                break;
-            }
-        } catch (e) {}
+    if (onuCache.length === 0) {
+        return res.json({ 
+            success: false, 
+            message: 'SmartOLT Data ချိတ်ဆက်၍ မရသေးပါ (ခဏစောင့်ပြီး ပြန်စမ်းပါ)' 
+        });
     }
 
-    if (foundOnu) {
+    // စာလုံးအထဲပါမပါ တိုက်ရိုက် Flex Search လုပ်မည် (ID / Custom ID / Name / Serial Number / External ID)
+    const matchedOnu = onuCache.find(onu => {
+        const customId = (onu.custom_id || '').toUpperCase();
+        const name = (onu.name || '').toUpperCase();
+        const sn = (onu.sn || '').toUpperCase();
+        const extId = (onu.unique_external_id || '').toUpperCase();
+
+        // ဥပမာ TTY01072 ဆိုရင် 01072 သို့ 1072 ပါရင်ပါ သေချာအောင် နံပါတ်ချည်းသီးသန့်ပါ စစ်ပေးသည်
+        const numOnly = searchKey.replace(/\D/g, '');
+
+        return customId === searchKey || 
+               name.includes(searchKey) || 
+               sn === searchKey || 
+               extId === searchKey ||
+               (numOnly.length > 0 && customId.includes(numOnly)) ||
+               (numOnly.length > 0 && name.includes(numOnly));
+    });
+
+    if (matchedOnu) {
         return res.json({
             success: true,
-            username: foundOnu.name || foundOnu.custom_id || foundOnu.unique_external_id || rawId,
-            fatBox: foundOnu.zone_name || foundOnu.odb_name || foundOnu.address || 'Unknown-FAT'
+            username: matchedOnu.name || matchedOnu.custom_id || matchedOnu.sn,
+            fatBox: matchedOnu.zone_name || matchedOnu.odb_name || matchedOnu.address || 'Unknown-FAT'
         });
     }
 
     res.json({ 
         success: false, 
-        message: `SmartOLT ထဲတွင် '${rawId}' အား မတွေ့ရှိပါ။ (ID / Name / External ID ကို စစ်ဆေးပါ)` 
+        message: `SmartOLT ထဲတွင် '${req.params.id}' အား မတွေ့ရှိပါ` 
     });
 });
 
