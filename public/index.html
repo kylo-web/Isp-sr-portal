@@ -44,6 +44,7 @@
                     </div>
                     <div class="issue-btn" onclick="selectIssue(this, '🟡 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ')">🟡 PON မီးခုန် / မီးသုံးလုံးလင်းပြီး လိုင်းသုံးမရ</div>
                     <div class="issue-btn" onclick="selectIssue(this, '⚡ Power တစ်ခုပဲလင်း')">⚡ Power တစ်ခုပဲလင်း</div>
+                    <div class="issue-btn" onclick="selectIssue(this, '🔌 No Power (မီးလုံးဝမလာပါ)')">🔌 No Power (မီးလုံးဝမလာပါ)</div>
                     <div class="issue-btn" onclick="selectIssue(this, '🔑 Password change (စကားဝှက်ပြောင်းရန်)')">🔑 Password change (စကားဝှက်ပြောင်းရန်)</div>
                 </div>
             </div>
@@ -70,7 +71,6 @@
         const passGroup = document.getElementById('passwordGroup');
         const passInput = document.getElementById('newPassword');
 
-        // Password change ရွေးထားလျှင် Input Box ဖော်ပေးရန်
         if (value.includes('Password change')) {
             passGroup.style.display = 'block';
             passInput.required = true;
