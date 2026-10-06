@@ -6,10 +6,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static('public'));
 
-const TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
-const TELEGRAM_CHAT_ID = 'YOUR_TELEGRAM_CHAT_ID_HERE';
+// 🔑 ဒီနေရာတွင် မိမိ၏ Telegram Bot Token နှင့် Chat ID အမှန်ကို ထည့်ပါ
+const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
+const TELEGRAM_CHAT_ID = '-1004295109530';
 
-// Customer Database (Key များကို အသေးဖြင့်သာ သိမ်းဆည်းထားပါသည်)
+// Customer Database
 const mockDatabase = {
     'tty01072': { name: 'Min thiha', fatBox: 'FAT-01' },
     'tty00001': { name: 'Kyaw Gyi', fatBox: 'FAT-01' },
@@ -20,9 +21,8 @@ const mockDatabase = {
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// 1. Customer ID Lookup API (Case-Insensitive)
+// 1. Customer ID Lookup API
 app.get('/api/get-customer/:id', (req, res) => {
-    // စာရိုက်ထည့်လိုက်သော ID ကို အသေးလုံး ပြောင်းလိုက်ပါသည်
     const customerId = req.params.id.trim().toLowerCase();
     const customerData = mockDatabase[customerId];
 
@@ -43,7 +43,7 @@ app.post('/api/submit-report', async (req, res) => {
     const customerData = mockDatabase[formattedId];
     const fatBox = customerData ? customerData.fatBox : 'Unknown-FAT';
 
-    // Rule 1: Customer ၁ ဦးလျှင် ၁ နေ့ ၁ ကြိမ်
+    // Rule 1: Customer တစ်ဦးလျှင် ၁ နေ့ ၁ ကြိမ်
     if (customerLastReportTime[formattedId] === todayDate) {
         return res.json({ 
             success: false, 
@@ -56,7 +56,7 @@ app.post('/api/submit-report', async (req, res) => {
                           `🆔 *Customer ID:* ${customerId.toUpperCase()}\n` +
                           `📦 *FAT Box:* ${fatBox}\n` +
                           `⚠️ *Issue:* ${issue}\n` +
-                          `⏰ *Time:* ${new Date().toLocaleString()}`;
+                          `⏰ *Time:* ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Yangon' })}`;
 
     try {
         await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
