@@ -11,14 +11,13 @@ const TELEGRAM_BOT_TOKEN = '8262489446:AAElYGOaU7gIOpcu-_gpCn3kfvLBLkyRXeM';
 const TELEGRAM_CHAT_ID = '-1004295109530';
 
 // 🌐 SmartOLT API Config
-// DOMAIN တွင် 'https://' မပါရပါ (ဥပမာ: 'mycompany.smartolt.com' သို့မဟုတ် 'mycompany')
 const SMARTOLT_DOMAIN = 'infinet-mm.smartolt.com'.replace(/^https?:\/\//, '').replace(/\/$/, '');
 const SMARTOLT_API_KEY = 'accea08359014b738df318ae274218e3';
 
 const customerLastReportTime = {};
 const fatRedLightReports = {};
 
-// ID Format ပြောင်းပေးသည့် Function (tty797 -> tty00797, tty0797, tty797)
+// ID Format အမျိုးမျိုး ပြောင်းပေးသည့် Function (tty797 -> tty00797, tty0797, tty797)
 function generatePossibleIDs(rawId) {
     const cleaned = rawId.trim().toLowerCase();
     const match = cleaned.match(/^([a-z]+)?(\d+)$/);
@@ -38,50 +37,49 @@ function generatePossibleIDs(rawId) {
     return Array.from(ids);
 }
 
-// SmartOLT API ရှာဖွေခြင်း
+// SmartOLT API မှ Customer ရှာဖွေခြင်း
 app.get('/api/get-customer/:id', async (req, res) => {
     const rawId = req.params.id.trim();
     const possibleIds = generatePossibleIDs(rawId);
 
-    // SmartOLT URL Standard
     const baseUrl = SMARTOLT_DOMAIN.includes('.') 
         ? `https://${SMARTOLT_DOMAIN}/api/onu/get_all_onus_details`
         : `https://${SMARTOLT_DOMAIN}.smartolt.com/api/onu/get_all_onus_details`;
 
     try {
-        let foundOnu = null;
+        // SmartOLT ထဲမှ ONU Data များအားလုံး တောင်းယူမည်
+        const response = await axios.get(baseUrl, {
+            headers: { 
+                'X-Token': SMARTOLT_API_KEY,
+                'Accept': 'application/json'
+            },
+            timeout: 10000
+        });
 
-        for (const searchId of possibleIds) {
-            try {
-                const response = await axios.get(baseUrl, {
-                    headers: { 
-                        'X-Token': SMARTOLT_API_KEY,
-                        'Accept': 'application/json'
-                    },
-                    params: { custom_id: searchId },
-                    timeout: 8000
+        if (response.data && response.data.onus && Array.isArray(response.data.onus)) {
+            const allOnus = response.data.onus;
+
+            // ရိုက်ထည့်လိုက်သော ID နှင့် တိကျစွာ ကိုက်ညီသည့် ONU ကို ရှာမည်
+            const matchedOnu = allOnus.find(onu => {
+                const customId = (onu.custom_id || '').toLowerCase();
+                const name = (onu.name || '').toLowerCase();
+                
+                return possibleIds.some(pId => customId === pId || name.includes(pId));
+            });
+
+            if (matchedOnu) {
+                return res.json({
+                    success: true,
+                    username: matchedOnu.name || matchedOnu.custom_id,
+                    fatBox: matchedOnu.zone_name || matchedOnu.odb_name || 'Unknown-FAT'
                 });
-
-                if (response.data && response.data.onus && response.data.onus.length > 0) {
-                    foundOnu = response.data.onus[0];
-                    break;
-                }
-            } catch (err) {
-                console.error(`Search failed for ${searchId}:`, err.response ? err.response.data : err.message);
             }
         }
 
-        if (foundOnu) {
-            res.json({
-                success: true,
-                username: foundOnu.name || foundOnu.custom_id,
-                fatBox: foundOnu.zone_name || foundOnu.odb_name || 'Unknown-FAT'
-            });
-        } else {
-            res.json({ success: false, message: 'SmartOLT ထဲတွင် Customer ID မတွေ့ရှိပါ' });
-        }
+        res.json({ success: false, message: 'SmartOLT ထဲတွင် Customer ID မတွေ့ရှိပါ' });
+
     } catch (error) {
-        console.error('SmartOLT General Error:', error.message);
+        console.error('SmartOLT API Error:', error.response ? error.response.data : error.message);
         res.json({ success: false, message: 'SmartOLT ချိတ်ဆက်မှု အဆင်မပြေပါ' });
     }
 });
