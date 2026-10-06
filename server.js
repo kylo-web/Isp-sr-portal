@@ -23,6 +23,13 @@ let onuCache = [];
 let lastCacheTime = 0;
 const CACHE_DURATION = 10 * 60 * 1000;
 
+function getDomainUrl() {
+    if (!SMARTOLT_DOMAIN) return '';
+    return SMARTOLT_DOMAIN.includes('.') 
+        ? `https://${SMARTOLT_DOMAIN}`
+        : `https://${SMARTOLT_DOMAIN}.smartolt.com`;
+}
+
 async function refreshOnuCache() {
     if (!SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) return;
     const now = Date.now();
@@ -30,9 +37,7 @@ async function refreshOnuCache() {
         return;
     }
 
-    const domainUrl = SMARTOLT_DOMAIN.includes('.') 
-        ? `https://${SMARTOLT_DOMAIN}`
-        : `https://${SMARTOLT_DOMAIN}.smartolt.com`;
+    const domainUrl = getDomainUrl();
 
     try {
         console.log('🔄 Fetching ONUs from SmartOLT...');
@@ -49,6 +54,31 @@ async function refreshOnuCache() {
     } catch (err) {
         console.error('❌ Cache Fetch Error:', err.message);
     }
+}
+
+// 🔍 Real-time dBm Signal ခေါ်ယူသည့် Function
+async function getExactSignalDbm(onuExternalId) {
+    if (!onuExternalId || !SMARTOLT_DOMAIN || !SMARTOLT_API_KEY) return 'N/A';
+    const domainUrl = getDomainUrl();
+
+    try {
+        // SmartOLT SNMP Signal API endpoint အား ခေါ်ယူခြင်း
+        const res = await axios.get(`${domainUrl}/api/onu/get_onu_signal/${onuExternalId}`, {
+            headers: { 'X-Token': SMARTOLT_API_KEY },
+            timeout: 8000
+        });
+
+        if (res.data && res.data.response) {
+            // response တွင် dBm တန်ဖိုး အတိအကျ သို့မဟုတ် rx_power ပါဝင်သည်
+            const signalVal = res.data.response.rx_power || res.data.snmp_signal || res.data.response;
+            if (typeof signalVal === 'string' || typeof signalVal === 'number') {
+                return signalVal.toString();
+            }
+        }
+    } catch (err) {
+        console.log('⚠️ Signal Fetch Warning:', err.message);
+    }
+    return 'N/A';
 }
 
 // 🔍 SmartOLT Lookup Endpoint
@@ -87,19 +117,30 @@ app.get('/api/get-customer/:id', async (req, res) => {
     });
 
     if (matchedOnu) {
-        // SmartOLT ထဲမှ အတိအကျ ODB/FAT Box Name ကို ဦးစားပေးယူသည်
+        // FAT Box / ODB Name
         const exactFatBox = matchedOnu.odb_name || matchedOnu.address || matchedOnu.zone_name || matchedOnu.olt_name || 'Unknown-FAT';
         
-        // SmartOLT Status & Signal
+        // SmartOLT Status
         const status = matchedOnu.status || 'Unknown';
-        const signal = matchedOnu.snmp_signal || matchedOnu.signal || 'N/A';
+        
+        // External ID သို့မဟုတ် ONU ID အား သုံး၍ dBm အတိအကျ ဆွဲယူခြင်း
+        const extId = matchedOnu.unique_external_id || matchedOnu.id || matchedOnu.sn;
+        let exactSignal = 'N/A';
+
+        // စာသား (Very good, warning) မဟုတ်ဘဲ ကိန်းဂဏန်း dBm ပါမပါ စစ်ဆေးခြင်း
+        const rawSignal = matchedOnu.snmp_signal || matchedOnu.signal || '';
+        if (rawSignal && (rawSignal.includes('-') || rawSignal.includes('dBm') || !isNaN(parseFloat(rawSignal)))) {
+            exactSignal = rawSignal;
+        } else if (extId) {
+            exactSignal = await getExactSignalDbm(extId);
+        }
 
         return res.json({
             success: true,
             username: matchedOnu.name || matchedOnu.custom_id || matchedOnu.sn,
             fatBox: exactFatBox,
             onuStatus: status,
-            signal: signal
+            signal: exactSignal
         });
     }
 
@@ -118,7 +159,12 @@ app.post('/api/submit-report', async (req, res) => {
 
     const currentFatBox = fatBox || 'Unknown-FAT';
     const currentStatus = onuStatus || 'N/A';
-    const currentSignal = (signal && signal !== 'N/A') ? `${signal} dBm` : 'N/A';
+    
+    // dBm စာသား Format သပ်ရပ်အောင် ပြုပြင်ခြင်း
+    let formattedSignal = 'N/A';
+    if (signal && signal !== 'N/A') {
+        formattedSignal = signal.includes('dBm') ? signal : `${signal} dBm`;
+    }
 
     if (customerLastReportTime[formattedId] === todayDate) {
         return res.json({ 
@@ -132,7 +178,7 @@ app.post('/api/submit-report', async (req, res) => {
                           `🆔 *Customer ID:* ${customerId.toUpperCase()}\n` +
                           `📦 *FAT Box:* ${currentFatBox}\n` +
                           `📡 *SmartOLT Status:* ${currentStatus}\n` +
-                          `📶 *Signal Power:* ${currentSignal}\n` +
+                          `📶 *Signal Power:* ${formattedSignal}\n` +
                           `⚠️ *Issue:* ${issue}\n` +
                           `⏰ *Time:* ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Yangon' })}`;
 
